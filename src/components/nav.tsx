@@ -7,7 +7,7 @@ import { NAV } from "@/lib/nav-items";
 
 
 // The five that fit on the phone's bottom bar.
-const MOBILE = ["/", "/deals", "/leads", "/calendar", "/brands"];
+const MOBILE = ["/", "/deals", "/leads", "/invoices", "/calendar"];
 
 function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
@@ -23,19 +23,25 @@ function Icon({ d }: { d: string }) {
 
 export function SideNav() {
   const pathname = usePathname();
+  const groups = [...new Set(NAV.map((n) => n.group))];
   return (
-    <nav className="flex flex-col gap-0.5">
-      {NAV.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
-          className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium ${
-            isActive(pathname, item.href) ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100"
-          }`}
-        >
-          <Icon d={item.icon} />
-          {item.label}
-        </Link>
+    <nav className="flex flex-col gap-0.5 overflow-y-auto">
+      {groups.map((g) => (
+        <div key={g} className="mb-1">
+          {g && <div className="px-3 pt-3 pb-1 text-[11px] font-semibold tracking-wide text-slate-400 uppercase">{g}</div>}
+          {NAV.filter((n) => n.group === g).map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium ${
+                isActive(pathname, item.href) ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              <Icon d={item.icon} />
+              {item.label}
+            </Link>
+          ))}
+        </div>
       ))}
     </nav>
   );

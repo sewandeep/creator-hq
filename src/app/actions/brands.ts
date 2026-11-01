@@ -12,6 +12,11 @@ function fields(fd: FormData) {
     website: text(fd, "website"),
     instagram: text(fd, "instagram"),
     notes: text(fd, "notes"),
+    legal_name: text(fd, "legal_name"),
+    billing_address: text(fd, "billing_address"),
+    gstin: text(fd, "gstin")?.toUpperCase() ?? null,
+    pan: text(fd, "pan")?.toUpperCase() ?? null,
+    tan: text(fd, "tan")?.toUpperCase() ?? null,
   };
 }
 

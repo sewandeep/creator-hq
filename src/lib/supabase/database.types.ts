@@ -51,14 +51,14 @@ isOneToOne: false
                   ]
                 },"brands": {
                   Row: {
-                    "category": string | null,"created_at": string,"id": string,"instagram": string | null,"name": string,"notes": string | null,"updated_at": string,"user_id": string,"website": string | null
+                    "billing_address": string | null,"category": string | null,"created_at": string,"gstin": string | null,"id": string,"instagram": string | null,"legal_name": string | null,"name": string,"notes": string | null,"pan": string | null,"tan": string | null,"updated_at": string,"user_id": string,"website": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "category"?: string | null,"created_at"?: string,"id"?: string,"instagram"?: string | null,"name": string,"notes"?: string | null,"updated_at"?: string,"user_id"?: string,"website"?: string | null
+                    "billing_address"?: string | null,"category"?: string | null,"created_at"?: string,"gstin"?: string | null,"id"?: string,"instagram"?: string | null,"legal_name"?: string | null,"name": string,"notes"?: string | null,"pan"?: string | null,"tan"?: string | null,"updated_at"?: string,"user_id"?: string,"website"?: string | null
                   }
                   Update: {
-                    "category"?: string | null,"created_at"?: string,"id"?: string,"instagram"?: string | null,"name"?: string,"notes"?: string | null,"updated_at"?: string,"user_id"?: string,"website"?: string | null
+                    "billing_address"?: string | null,"category"?: string | null,"created_at"?: string,"gstin"?: string | null,"id"?: string,"instagram"?: string | null,"legal_name"?: string | null,"name"?: string,"notes"?: string | null,"pan"?: string | null,"tan"?: string | null,"updated_at"?: string,"user_id"?: string,"website"?: string | null
                   }
                   Relationships: [
                     
@@ -149,13 +149,187 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"email_log": {
+                  Row: {
+                    "attachment_name": string | null,"body": string,"brand_id": string | null,"cc_addresses": string | null,"created_at": string,"deal_id": string | null,"error": string | null,"id": string,"invoice_id": string | null,"status": string,"subject": string,"to_addresses": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attachment_name"?: string | null,"body": string,"brand_id"?: string | null,"cc_addresses"?: string | null,"created_at"?: string,"deal_id"?: string | null,"error"?: string | null,"id"?: string,"invoice_id"?: string | null,"status": string,"subject": string,"to_addresses": string,"user_id"?: string
+                  }
+                  Update: {
+                    "attachment_name"?: string | null,"body"?: string,"brand_id"?: string | null,"cc_addresses"?: string | null,"created_at"?: string,"deal_id"?: string | null,"error"?: string | null,"id"?: string,"invoice_id"?: string | null,"status"?: string,"subject"?: string,"to_addresses"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "email_log_brand_id_fkey"
+      columns: ["brand_id"]
+isOneToOne: false
+      referencedRelation: "brands"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "email_log_deal_id_fkey"
+      columns: ["deal_id"]
+isOneToOne: false
+      referencedRelation: "deals"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "email_log_invoice_id_fkey"
+      columns: ["invoice_id"]
+isOneToOne: false
+      referencedRelation: "invoices"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"email_templates": {
+                  Row: {
+                    "attach_invoice": boolean,"body": string,"created_at": string,"id": string,"name": string,"position": number,"subject": string,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attach_invoice"?: boolean,"body": string,"created_at"?: string,"id"?: string,"name": string,"position"?: number,"subject": string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "attach_invoice"?: boolean,"body"?: string,"created_at"?: string,"id"?: string,"name"?: string,"position"?: number,"subject"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"invoice_items": {
+                  Row: {
+                    "amount": number | null,"description": string,"id": string,"invoice_id": string,"position": number,"quantity": number,"rate": number,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount"?: never,"description": string,"id"?: string,"invoice_id": string,"position"?: number,"quantity"?: number,"rate": number,"user_id"?: string
+                  }
+                  Update: {
+                    "amount"?: never,"description"?: string,"id"?: string,"invoice_id"?: string,"position"?: number,"quantity"?: number,"rate"?: number,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "invoice_items_invoice_id_fkey"
+      columns: ["invoice_id"]
+isOneToOne: false
+      referencedRelation: "invoices"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"invoices": {
+                  Row: {
+                    "bill_to_address": string | null,"bill_to_gstin": string | null,"bill_to_name": string,"bill_to_pan": string | null,"brand_id": string,"created_at": string,"deal_id": string | null,"due_date": string | null,"fy": number,"id": string,"invoice_number": string,"issue_date": string,"notes": string | null,"paid_at": string | null,"sent_at": string | null,"seq": number,"status": string,"subtotal": number,"tds_rate": number | null,"tds_section": string | null,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "bill_to_address"?: string | null,"bill_to_gstin"?: string | null,"bill_to_name": string,"bill_to_pan"?: string | null,"brand_id": string,"created_at"?: string,"deal_id"?: string | null,"due_date"?: string | null,"fy": number,"id"?: string,"invoice_number": string,"issue_date"?: string,"notes"?: string | null,"paid_at"?: string | null,"sent_at"?: string | null,"seq": number,"status"?: string,"subtotal"?: number,"tds_rate"?: number | null,"tds_section"?: string | null,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "bill_to_address"?: string | null,"bill_to_gstin"?: string | null,"bill_to_name"?: string,"bill_to_pan"?: string | null,"brand_id"?: string,"created_at"?: string,"deal_id"?: string | null,"due_date"?: string | null,"fy"?: number,"id"?: string,"invoice_number"?: string,"issue_date"?: string,"notes"?: string | null,"paid_at"?: string | null,"sent_at"?: string | null,"seq"?: number,"status"?: string,"subtotal"?: number,"tds_rate"?: number | null,"tds_section"?: string | null,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "invoices_brand_id_fkey"
+      columns: ["brand_id"]
+isOneToOne: false
+      referencedRelation: "brands"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "invoices_deal_id_fkey"
+      columns: ["deal_id"]
+isOneToOne: false
+      referencedRelation: "deals"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"payments": {
+                  Row: {
+                    "brand_id": string,"created_at": string,"deal_id": string | null,"gross_amount": number,"id": string,"invoice_id": string | null,"mode": string | null,"net_amount": number | null,"notes": string | null,"received_date": string,"reference": string | null,"tds_amount": number,"tds_section": string | null,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "brand_id": string,"created_at"?: string,"deal_id"?: string | null,"gross_amount": number,"id"?: string,"invoice_id"?: string | null,"mode"?: string | null,"net_amount"?: never,"notes"?: string | null,"received_date": string,"reference"?: string | null,"tds_amount"?: number,"tds_section"?: string | null,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "brand_id"?: string,"created_at"?: string,"deal_id"?: string | null,"gross_amount"?: number,"id"?: string,"invoice_id"?: string | null,"mode"?: string | null,"net_amount"?: never,"notes"?: string | null,"received_date"?: string,"reference"?: string | null,"tds_amount"?: number,"tds_section"?: string | null,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "payments_brand_id_fkey"
+      columns: ["brand_id"]
+isOneToOne: false
+      referencedRelation: "brands"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payments_deal_id_fkey"
+      columns: ["deal_id"]
+isOneToOne: false
+      referencedRelation: "deals"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "payments_invoice_id_fkey"
+      columns: ["invoice_id"]
+isOneToOne: false
+      referencedRelation: "invoices"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"profile": {
+                  Row: {
+                    "address": string | null,"bank_account_name": string | null,"bank_account_number": string | null,"bank_ifsc": string | null,"bank_name": string | null,"default_tds_rate": number,"default_tds_section": string,"display_name": string | null,"email": string | null,"invoice_footer": string | null,"invoice_prefix": string,"legal_name": string | null,"pan": string | null,"payment_terms_days": number,"phone": string | null,"updated_at": string,"upi_id": string | null,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "address"?: string | null,"bank_account_name"?: string | null,"bank_account_number"?: string | null,"bank_ifsc"?: string | null,"bank_name"?: string | null,"default_tds_rate"?: number,"default_tds_section"?: string,"display_name"?: string | null,"email"?: string | null,"invoice_footer"?: string | null,"invoice_prefix"?: string,"legal_name"?: string | null,"pan"?: string | null,"payment_terms_days"?: number,"phone"?: string | null,"updated_at"?: string,"upi_id"?: string | null,"user_id"?: string
+                  }
+                  Update: {
+                    "address"?: string | null,"bank_account_name"?: string | null,"bank_account_number"?: string | null,"bank_ifsc"?: string | null,"bank_name"?: string | null,"default_tds_rate"?: number,"default_tds_section"?: string,"display_name"?: string | null,"email"?: string | null,"invoice_footer"?: string | null,"invoice_prefix"?: string,"legal_name"?: string | null,"pan"?: string | null,"payment_terms_days"?: number,"phone"?: string | null,"updated_at"?: string,"upi_id"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"rate_card": {
+                  Row: {
+                    "id": string,"notes": string | null,"platform": string,"price": number,"type": string,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "id"?: string,"notes"?: string | null,"platform"?: string,"price": number,"type": string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "id"?: string,"notes"?: string | null,"platform"?: string,"price"?: number,"type"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"tds_checks": {
+                  Row: {
+                    "amount_in_26as": number | null,"brand_id": string,"checked_on": string,"fy": number,"id": string,"notes": string | null,"tds_in_26as": number | null,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "amount_in_26as"?: number | null,"brand_id": string,"checked_on"?: string,"fy": number,"id"?: string,"notes"?: string | null,"tds_in_26as"?: number | null,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "amount_in_26as"?: number | null,"brand_id"?: string,"checked_on"?: string,"fy"?: number,"id"?: string,"notes"?: string | null,"tds_in_26as"?: number | null,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "tds_checks_brand_id_fkey"
+      columns: ["brand_id"]
+isOneToOne: false
+      referencedRelation: "brands"
+      referencedColumns: ["id"]
+    }
+                  ]
                 }
           }
           Views: {
             [_ in never]: never
           }
           Functions: {
-            [_ in never]: never
+            "refresh_invoice":
+{ Args: { "p_invoice": string }; Returns: undefined
+                           }
           }
           Enums: {
             [_ in never]: never

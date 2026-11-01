@@ -11,7 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-dvh lg:flex">
       {/* Desktop sidebar */}
       <aside className="no-print sticky top-0 hidden h-dvh w-56 shrink-0 flex-col border-r border-slate-200 bg-white px-3 py-5 lg:flex">
-        <Link href="/" className="mb-6 flex items-center gap-2 px-3 text-base font-semibold">
+        <Link href="/" className="mb-5 flex items-center gap-2 px-3 text-base font-semibold">
           <span className="grid h-7 w-7 place-items-center rounded-lg bg-brand-600 text-xs text-white">HQ</span>
           Creator HQ
         </Link>
@@ -45,7 +45,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 <path d="M4 7h16M4 12h16M4 17h16" />
               </svg>
             </summary>
-            <div className="absolute right-0 mt-2 w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
+            <div className="absolute right-0 mt-2 max-h-[75dvh] w-52 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg">
               {NAV.map((n) => (
                 <Link key={n.href} href={n.href} className="block rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-100">
                   {n.label}

@@ -9,6 +9,8 @@ import { Badge, Card, Empty, PageHeader, StageBadge } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { DELIVERABLE_STATUSES, SOURCES, STAGES, stageInfo } from "@/lib/constants";
 import { fmtDate, fmtDateTime, relativeDay, rupees, todayIST } from "@/lib/format";
+import { InvoiceBadge } from "@/components/invoice-badge";
+import { isOverdue } from "@/lib/money";
 import { AddDeliverable, EditDeliverable, FollowUpForm, NoteForm, UploadForm } from "./parts";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -25,7 +27,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   const { supabase } = await requireUser();
   const today = todayIST();
 
-  const [{ data: deal }, { data: deliverables }, { data: activities }, { data: files }] = await Promise.all([
+  const [{ data: deal }, { data: deliverables }, { data: activities }, { data: files }, { data: invoices }, { data: loosePayments }] = await Promise.all([
     supabase
       .from("deals")
       .select("*, brand:brands(id, name), contact:contacts(id, name, email, phone, role)")
@@ -34,6 +36,8 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
     supabase.from("deliverables").select("*").eq("deal_id", id).order("due_date", { nullsFirst: false }).order("created_at"),
     supabase.from("activities").select("*").eq("deal_id", id).order("created_at", { ascending: false }),
     supabase.from("deal_files").select("*").eq("deal_id", id).order("created_at", { ascending: false }),
+    supabase.from("invoices").select("id, invoice_number, issue_date, due_date, subtotal, status, payments(gross_amount, tds_amount)").eq("deal_id", id).order("issue_date"),
+    supabase.from("payments").select("id, received_date, gross_amount, tds_amount, net_amount").eq("deal_id", id).is("invoice_id", null),
   ]);
   if (!deal) notFound();
 
@@ -63,6 +67,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
                 <button className="btn-primary">Move to {nextStage.label} →</button>
               </form>
             )}
+            <Link href={`/email/compose?deal=${deal.id}`} className="btn-secondary">Email brand</Link>
             <Link href={`/deals/${deal.id}/edit`} className="btn-secondary">Edit</Link>
             <ConfirmButton action={deleteDeal.bind(null, deal.id)} confirmText="Delete this deal, its deliverables, notes and files? This can't be undone.">
               Delete
@@ -182,6 +187,42 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
               {deal.lost_reason && <Row label="Lost because">{deal.lost_reason}</Row>}
             </dl>
             {deal.notes && <p className="mt-4 rounded-lg bg-slate-50 p-3 text-sm whitespace-pre-wrap text-slate-700">{deal.notes}</p>}
+          </Card>
+
+          <Card
+            title="Invoices & payments"
+            action={<Link href={`/invoices/new?deal=${deal.id}`} className="link text-xs">+ Invoice</Link>}
+          >
+            {invoices?.length || loosePayments?.length ? (
+              <ul className="space-y-3 text-sm">
+                {invoices?.map((inv) => {
+                  const paid = inv.payments.reduce((t, p) => t + Number(p.gross_amount), 0);
+                  const tds = inv.payments.reduce((t, p) => t + Number(p.tds_amount), 0);
+                  return (
+                    <li key={inv.id}>
+                      <div className="flex items-center justify-between gap-2">
+                        <Link href={`/invoices/${inv.id}`} className="link font-medium">{inv.invoice_number}</Link>
+                        <InvoiceBadge status={inv.status} overdue={isOverdue(inv, today)} />
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {rupees(inv.subtotal)} · {fmtDate(inv.issue_date, true)}
+                        {paid > 0 && ` · ${rupees(paid - tds)} in bank${tds ? ` + ${rupees(tds)} TDS` : ""}`}
+                      </div>
+                    </li>
+                  );
+                })}
+                {loosePayments?.map((p) => (
+                  <li key={p.id} className="text-xs text-slate-600">
+                    Payment {fmtDate(p.received_date, true)}: {rupees(p.net_amount)} in bank{Number(p.tds_amount) ? ` + ${rupees(p.tds_amount)} TDS` : ""}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-slate-500">No invoice yet.</p>
+                <Link href={`/invoices/new?deal=${deal.id}`} className="btn-secondary w-full">Create invoice from this deal</Link>
+              </div>
+            )}
           </Card>
 
           {deal.stage !== "paid" && deal.stage !== "lost" && (

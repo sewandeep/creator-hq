@@ -40,7 +40,13 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
       <PageHeader
         title={brand.name}
         subtitle={[brand.category, brand.instagram].filter(Boolean).join(" · ") || undefined}
-        actions={<Link href={`/deals/new?brand=${brand.id}`} className="btn-primary">+ New deal</Link>}
+        actions={
+          <>
+            <Link href={`/email/compose?brand=${brand.id}`} className="btn-secondary">Email</Link>
+            <Link href={`/invoices/new?brand=${brand.id}`} className="btn-secondary">+ Invoice</Link>
+            <Link href={`/deals/new?brand=${brand.id}`} className="btn-primary">+ New deal</Link>
+          </>
+        }
       />
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">

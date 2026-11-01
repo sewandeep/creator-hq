@@ -11,7 +11,7 @@ export default async function Dashboard() {
   const fy = fyOf(today);
   const { from, to } = fyRange(fy);
 
-  const [deals, followUps, deliverables, dealDeadlines, activity] = await Promise.all([
+  const [deals, followUps, deliverables, dealDeadlines, activity, openInvoices, fyPayments] = await Promise.all([
     supabase.from("deals").select("id, stage, amount, deal_date"),
     supabase
       .from("deals")
@@ -39,7 +39,20 @@ export default async function Dashboard() {
       .select("id, kind, body, created_at, deal:deals(id, title)")
       .order("created_at", { ascending: false })
       .limit(8),
+    supabase
+      .from("invoices")
+      .select("id, invoice_number, due_date, subtotal, status, brand:brands(name), payments(gross_amount)")
+      .in("status", ["sent", "partially_paid"])
+      .order("due_date"),
+    supabase.from("payments").select("gross_amount, tds_amount").gte("received_date", from).lte("received_date", to),
   ]);
+  const unpaid = (openInvoices.data ?? []).map((i) => ({
+    ...i,
+    balance: Math.max(0, Number(i.subtotal) - i.payments.reduce((t, p) => t + Number(p.gross_amount), 0)),
+  }));
+  const overdueInvoices = unpaid.filter((i) => i.due_date && i.due_date < today);
+  const receivedFy = (fyPayments.data ?? []).reduce((t, p) => t + Number(p.gross_amount), 0);
+  const tdsFy = (fyPayments.data ?? []).reduce((t, p) => t + Number(p.tds_amount), 0);
 
   const all = deals.data ?? [];
   const sum = (rows: typeof all) => rows.reduce((t, d) => t + Number(d.amount ?? 0), 0);
@@ -77,12 +90,40 @@ export default async function Dashboard() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Active deals" value={rupees(sum(active))} hint={`${active.length} deals in progress`} href="/deals" />
-        <Stat label="Waiting for payment" value={rupees(sum(awaiting))} hint={`${awaiting.length} posted / invoiced`} href="/deals?view=list&stage=invoiced" />
-        <Stat label={`Earned ${fyLabel(fy)}`} value={rupees(sum(paidThisFy))} hint={`${paidThisFy.length} paid deals`} href="/history" />
+        <Stat
+          label="Waiting for payment"
+          value={rupees(unpaid.reduce((t, i) => t + i.balance, 0) + sum(awaiting.filter((d) => d.stage === "posted")))}
+          hint={`${unpaid.length} unpaid invoices${overdueInvoices.length ? ` · ${overdueInvoices.length} overdue` : ""}`}
+          href="/invoices?status=unpaid"
+        />
+        <Stat
+          label={`Received ${fyLabel(fy)}`}
+          value={rupees(receivedFy || sum(paidThisFy))}
+          hint={receivedFy ? `incl. ${rupees(tdsFy)} TDS` : `${paidThisFy.length} paid deals`}
+          href="/payments"
+        />
         <Stat label="Open leads" value={leads.length} hint="Lead · contacted · negotiating" href="/leads" />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        {overdueInvoices.length > 0 && (
+          <Card title="Overdue invoices" className="lg:col-span-2" action={<Link href="/invoices?status=overdue" className="link text-xs">All →</Link>}>
+            <ul className="divide-y divide-slate-100">
+              {overdueInvoices.map((i) => (
+                <li key={i.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+                  <Link href={`/invoices/${i.id}`} className="min-w-0 hover:underline">
+                    <div className="truncate text-sm font-medium">{i.brand?.name} · {i.invoice_number}</div>
+                    <div className="text-xs text-rose-600">{rupees(i.balance)} · {relativeDay(i.due_date!, today)}</div>
+                  </Link>
+                  <Link href={`/email/compose?invoice=${i.id}&template=${encodeURIComponent("Payment reminder")}`} className="btn-secondary px-3 py-1 text-xs">
+                    Send reminder
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
+
         <Card title="Follow-ups due" action={<Link href="/leads" className="link text-xs">All leads →</Link>}>
           {followUps.data?.length ? (
             <ul className="divide-y divide-slate-100">
