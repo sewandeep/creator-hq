@@ -1,0 +1,92 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { Badge, Card, PageHeader } from "@/components/ui";
+import { requireUser } from "@/lib/auth";
+import { isEmailConfigured } from "@/lib/email";
+
+export const metadata: Metadata = { title: "Setup check" };
+
+// Which database update file creates which tables.
+const MIGRATIONS = [
+  {
+    file: "supabase/migrations/20261101000000_phase1_crm.sql",
+    label: "Phase 1 — deals, brands, contacts",
+    tables: ["brands", "contacts", "deals", "deliverables", "activities", "deal_files"],
+  },
+  {
+    file: "supabase/migrations/20261101100000_phase2_money.sql",
+    label: "Phase 2 — invoices, payments, TDS, emails",
+    tables: ["profile", "invoices", "invoice_items", "payments", "tds_checks", "email_templates", "email_log", "rate_card"],
+  },
+] as const;
+
+type Check = { ok: boolean; warn?: boolean; title: string; detail?: React.ReactNode };
+
+export default async function SetupPage() {
+  const { supabase } = await requireUser();
+
+  const migrationChecks: Check[] = [];
+  for (const m of MIGRATIONS) {
+    const missing: string[] = [];
+    for (const t of m.tables) {
+      const { error } = await supabase.from(t).select("*").limit(0);
+      if (error && (error.code === "PGRST205" || error.code === "42P01" || /could not find the table|does not exist/i.test(error.message))) missing.push(t);
+    }
+    migrationChecks.push(
+      missing.length === 0
+        ? { ok: true, title: m.label }
+        : {
+            ok: false,
+            title: `${m.label}: database update not applied`,
+            detail: (
+              <>
+                Missing tables: {missing.join(", ")}. In Supabase open <b>SQL Editor → New query</b>, paste the whole file{" "}
+                <a className="link" href={`https://github.com/sewandeep/creator-hq/blob/main/${m.file}`} target="_blank" rel="noreferrer">
+                  {m.file.split("/").pop()}
+                </a>{" "}
+                from GitHub, and press <b>Run</b>. Then reload this page.
+              </>
+            ),
+          },
+    );
+  }
+
+  const { error: bucketError } = await supabase.storage.from("deal-files").list("", { limit: 1 });
+  const { data: profile } = await supabase.from("profile").select("legal_name, pan, bank_account_number").maybeSingle();
+
+  const checks: Check[] = [
+    ...migrationChecks,
+    bucketError
+      ? { ok: false, title: "File storage (briefs & contracts)", detail: `Storage isn't ready: ${bucketError.message}. Re-run the Phase 1 file in the SQL Editor.` }
+      : { ok: true, title: "File storage (briefs & contracts)" },
+    profile?.legal_name && profile.pan
+      ? { ok: true, title: "Your invoice details (name & PAN)" }
+      : { ok: false, warn: true, title: "Your invoice details (name & PAN)", detail: <>Not filled in yet — <Link href="/settings" className="link">add them in Settings</Link>.</> },
+    isEmailConfigured()
+      ? { ok: true, title: "Sending emails from Gmail" }
+      : { ok: false, warn: true, title: "Sending emails from Gmail (optional)", detail: <>Not connected — see <Link href="/settings" className="link">Settings → Email sending</Link>. The app works without it.</> },
+  ];
+  const blocking = checks.filter((c) => !c.ok && !c.warn).length;
+
+  return (
+    <div className="max-w-2xl">
+      <PageHeader title="Setup check" subtitle={blocking ? `${blocking} thing${blocking === 1 ? "" : "s"} to fix` : "Everything needed is in place ✓"} />
+      <Card>
+        <ul className="divide-y divide-slate-100">
+          {checks.map((c) => (
+            <li key={c.title} className="flex items-start gap-3 py-3">
+              <span className="mt-0.5 text-lg leading-none">{c.ok ? "✅" : c.warn ? "⚠️" : "❌"}</span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                  {c.title}
+                  {!c.ok && <Badge tone={c.warn ? "amber" : "red"}>{c.warn ? "Recommended" : "Needs fixing"}</Badge>}
+                </div>
+                {c.detail && <p className="mt-1 text-sm text-slate-600">{c.detail}</p>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </div>
+  );
+}

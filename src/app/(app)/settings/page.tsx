@@ -19,7 +19,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <PageHeader title="Settings" subtitle="These details are printed on your invoices." />
+      <PageHeader title="Settings" subtitle="These details are printed on your invoices." actions={<Link href="/setup" className="btn-secondary">Run setup check</Link>} />
 
       <ActionForm action={saveProfile} className="space-y-6">
         <Card title="Your details">
