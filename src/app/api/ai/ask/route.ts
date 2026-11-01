@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { runAssistant } from "@/lib/ai/assistant";
 import type { InFile } from "@/lib/ai/files";
+import type { PageContext } from "@/lib/ai/context";
 import { isQuickEntry } from "@/lib/ai/route-input";
 import { quickAddCore } from "@/lib/finance/entries";
 import { AiError } from "@/lib/finance/gemini";
@@ -27,6 +28,12 @@ async function handle(req: Request) {
   const { supabase, userId } = await requireUser();
   const form = await req.formData();
   const text = String(form.get("text") ?? "").slice(0, 4000);
+  let context: PageContext | null = null;
+  try {
+    context = form.get("context") ? (JSON.parse(String(form.get("context"))) as PageContext) : null;
+  } catch {
+    context = null;
+  }
   const files: InFile[] = [];
   for (const f of form.getAll("files")) {
     if (f instanceof File && f.size > 0) {
@@ -64,7 +71,7 @@ async function handle(req: Request) {
 
     after(async () => {
       try {
-        await runAssistant(db, userId, { text, files, channel: "app", saved });
+        await runAssistant(db, userId, { text, files, channel: "app", saved, context });
       } catch (e) {
         const message = e instanceof AiError || e instanceof FormError ? e.message : `Something went wrong: ${e instanceof Error ? e.message : String(e)}`;
         await db.from("ai_messages").update({ content: `⚠️ ${message}`, attachments: [] }).eq("id", saved.replyMessageId);

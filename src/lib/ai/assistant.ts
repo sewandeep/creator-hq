@@ -4,6 +4,7 @@ import { callGemini, type GeminiContent, type GeminiPart } from "@/lib/finance/g
 import { fmtDate, todayIST } from "@/lib/format";
 import { fyLabel, fyOf } from "@/lib/fy";
 import type { Json } from "@/lib/supabase/database.types";
+import { describeContext, type PageContext } from "./context";
 import type { InFile } from "./files";
 import { TOOL_DECLARATIONS, runTool, type ToolContext } from "./tools";
 
@@ -43,6 +44,8 @@ export async function runAssistant(
     text: string;
     files?: InFile[];
     channel: "app" | "telegram" | "rundown";
+    /** What the user is looking at in the app (a deal, brand, transaction…). */
+    context?: PageContext | null;
     /** Already-saved chat rows for this turn (the app saves them up front). */
     saved?: { userMessageId: string; replyMessageId: string };
   },
@@ -66,7 +69,12 @@ export async function runAssistant(
   const contents: GeminiContent[] = (history ?? [])
     .reverse()
     .map((m) => ({ role: m.role === "user" ? ("user" as const) : ("model" as const), parts: [{ text: m.content.slice(0, 4000) }] }));
-  const userParts: GeminiPart[] = [{ text: input.text.trim() || (prepared.refs.length ? "Here's a file — please handle it." : "Hi") }, ...prepared.parts];
+  const where = await describeContext(db, userId, input.context ?? null);
+  const userParts: GeminiPart[] = [
+    ...(where ? [{ text: `[Context: ${where}]` }] : []),
+    { text: input.text.trim() || (prepared.refs.length ? "Here's a file — please handle it." : "Hi") },
+    ...prepared.parts,
+  ];
   contents.push({ role: "user", parts: userParts });
 
   const ctx: ToolContext = { db, userId, files: prepared.refs, channel: input.channel, proposals: [] };

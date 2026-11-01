@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { isAiConfigured } from "@/lib/finance/gemini";
+import { suggestionsFor } from "@/lib/ai/suggestions";
 import { Chat, type ChatMessage } from "./chat";
 import type { Proposal } from "./proposal-card";
 
@@ -29,7 +30,7 @@ export default async function AskPage({ searchParams }: { searchParams: Promise<
     <div className="mx-auto max-w-3xl">
       <PageHeader title="Ask AI" subtitle="Ask about your deals and money, give instructions, or drop in files and voice notes." />
       {!isAiConfigured() && <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">Add your Gemini key (GEMINI_API_KEY) to use the assistant — see Setup check.</p>}
-      <Chat initial={initial} initialQuery={q?.trim() || null} />
+      <Chat initial={initial} initialQuery={q?.trim() || null} suggestions={suggestionsFor(null)} />
     </div>
   );
 }

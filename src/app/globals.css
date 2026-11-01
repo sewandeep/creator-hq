@@ -18,7 +18,7 @@ body {
 }
 
 @utility card {
-  @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+  @apply rounded-2xl border border-slate-200 bg-white shadow-sm;
 }
 
 @utility label {

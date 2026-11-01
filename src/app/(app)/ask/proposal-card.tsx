@@ -42,7 +42,7 @@ const TITLES: Record<string, string> = {
   attach_file: "Attach file",
 };
 
-export function ProposalCard({ p: initial }: { p: Proposal }) {
+export function ProposalCard({ p: initial, onDone }: { p: Proposal; onDone?: () => void }) {
   const [p, setP] = useState(initial);
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState(false);
@@ -98,6 +98,7 @@ export function ProposalCard({ p: initial }: { p: Proposal }) {
     }
     if (!r.ok) return setError(r.message);
     setP({ ...p, status: "applied", result: r });
+    onDone?.();
   }
 
   const done = p.status === "applied";

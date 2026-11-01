@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { clearChat } from "@/app/actions/ai";
 import { Md } from "@/components/md";
@@ -13,17 +14,9 @@ export type ChatMessage = {
   proposals: Proposal[];
   pending?: boolean;
 };
+export type ChatContext = { type: "deal" | "brand" | "invoice" | "transaction" | "page"; id?: string; path?: string } | null;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-const SUGGESTIONS = [
-  "How much did I spend this month, and on what?",
-  "Who still owes me money?",
-  "Which invoices are unpaid?",
-  "Give me a rundown of this week",
-  "What did brands pay me per reel?",
-  "What's due in the next 7 days?",
-];
 
 /** Shrinks big photos so uploads stay fast. */
 async function shrinkImage(file: File): Promise<File> {
@@ -39,8 +32,28 @@ async function shrinkImage(file: File): Promise<File> {
   return blob ? new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" }) : file;
 }
 
-export function Chat({ initial, initialQuery }: { initial: ChatMessage[]; initialQuery: string | null }) {
-  const [messages, setMessages] = useState<ChatMessage[]>(initial);
+export function Chat({
+  initial,
+  initialQuery = null,
+  variant = "page",
+  context = null,
+  suggestions,
+  queued,
+  onQueuedTaken,
+}: {
+  /** Leave undefined to load the history when the chat first appears. */
+  initial?: ChatMessage[];
+  initialQuery?: string | null;
+  variant?: "page" | "panel";
+  context?: ChatContext;
+  suggestions: string[];
+  /** A message handed over from elsewhere (e.g. the Today box) to send right away. */
+  queued?: string | null;
+  onQueuedTaken?: () => void;
+}) {
+  const router = useRouter();
+  const [messages, setMessages] = useState<ChatMessage[]>(initial ?? []);
+  const [loaded, setLoaded] = useState(Boolean(initial));
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [sending, setSending] = useState(false);
@@ -51,6 +64,17 @@ export function Chat({ initial, initialQuery }: { initial: ChatMessage[]; initia
   const sentInitial = useRef(false);
 
   useEffect(() => {
+    if (loaded) return;
+    void fetch("/api/ai/history")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((m: ChatMessage[]) => {
+        setMessages(m);
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, [loaded]);
+
+  useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, sending]);
 
@@ -59,10 +83,10 @@ export function Chat({ initial, initialQuery }: { initial: ChatMessage[]; initia
     setSending(true);
     setText("");
     setFiles([]);
-    const userMsg: ChatMessage = { id: `u${Date.now()}`, role: "user", content: body.trim() || "(sent a file)", attachments: attach.map((f) => ({ name: f.name })), proposals: [] };
-    setMessages((m) => [...m, userMsg]);
+    setMessages((m) => [...m, { id: `u${Date.now()}`, role: "user", content: body.trim() || "(sent a file)", attachments: attach.map((f) => ({ name: f.name })), proposals: [] }]);
     const fd = new FormData();
     fd.set("text", body);
+    if (context) fd.set("context", JSON.stringify(context));
     for (const f of attach) fd.append("files", await shrinkImage(f));
     const r = await fetch("/api/ai/ask", { method: "POST", body: fd })
       .then(async (x) => {
@@ -75,21 +99,32 @@ export function Chat({ initial, initialQuery }: { initial: ChatMessage[]; initia
       })
       .catch((e) => ({ error: `Couldn't send your message (${e instanceof Error ? e.message : "network error"}). Check your connection and try again.` }));
     if (r.pending) {
-      // The AI is working in the background; the answer is picked up below.
       setMessages((m) => [...m, { id: r.pending, role: "assistant", content: "", attachments: [], proposals: [], pending: true }]);
     } else {
       setMessages((m) => [...m, { id: `a${Date.now()}`, role: "assistant", content: r.error ? `⚠️ ${r.error}` : r.reply, attachments: [], proposals: r.proposals ?? [] }]);
+      if (r.quick) router.refresh();
     }
     setSending(false);
   }
 
   useEffect(() => {
-    if (initialQuery && !sentInitial.current) {
-      sentInitial.current = true;
-      void send(initialQuery, []);
-    }
+    if (!initialQuery || sentInitial.current || !loaded) return;
+    sentInitial.current = true;
+    const t = setTimeout(() => void send(initialQuery, []), 0);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialQuery]);
+  }, [initialQuery, loaded]);
+
+  // A message handed over from elsewhere (e.g. the Today box).
+  useEffect(() => {
+    if (!queued || !loaded) return;
+    const t = setTimeout(() => {
+      onQueuedTaken?.();
+      void send(queued, []);
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queued, loaded]);
 
   // Pick up answers the AI is still working on (also after a reload).
   const waiting = messages.filter((m) => m.pending).map((m) => m.id).join(",");
@@ -97,10 +132,10 @@ export function Chat({ initial, initialQuery }: { initial: ChatMessage[]; initia
     if (!waiting) return;
     let stop = false;
     void (async () => {
-      const started = Date.now();
+      let tries = 0;
       for (const id of waiting.split(",")) {
         while (!stop) {
-          await sleep(Date.now() - started < 20_000 ? 1500 : 3000);
+          await sleep(tries++ < 12 ? 1500 : 3000);
           const r = await fetch(`/api/ai/messages/${id}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
           if (stop) return;
           if (r && !r.pending) {
@@ -130,8 +165,7 @@ export function Chat({ initial, initialQuery }: { initial: ChatMessage[]; initia
         stream.getTracks().forEach((t) => t.stop());
         setRecording(false);
         const mime = (rec.mimeType || type || "audio/webm").split(";")[0];
-        const file = new File(chunks, `voice-note.${mime.includes("mp4") ? "m4a" : "webm"}`, { type: mime });
-        void send(text, [...files, file]);
+        void send(text, [...files, new File(chunks, `voice-note.${mime.includes("mp4") ? "m4a" : "webm"}`, { type: mime })]);
       };
       rec.start();
       recorder.current = rec;
@@ -141,51 +175,57 @@ export function Chat({ initial, initialQuery }: { initial: ChatMessage[]; initia
     }
   }
 
+  const panel = variant === "panel";
   return (
-    <div className="flex min-h-[calc(100dvh-12rem)] flex-col">
-      <div className="flex-1 space-y-4 pb-4">
-        {messages.length === 0 && (
-          <div className="card p-5">
-            <p className="text-sm text-slate-700">
-              Ask anything about your deals and money, tell me to do something (&quot;add a deal with Mamaearth, 2 reels, 40k, due 20 Nov&quot;), or drop in a file — a brand email, brief, bank statement, 26AS, receipt photo, Excel sheet — or record a voice note. I&apos;ll always show you what I&apos;m about to save so you can confirm it.
+    <div className={panel ? "flex h-full min-h-0 flex-col" : "flex min-h-[calc(100dvh-12rem)] flex-col"}>
+      <div className={panel ? "min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4" : "flex-1 space-y-4 pb-4"}>
+        {!loaded && <p className="text-sm text-slate-400">Loading…</p>}
+        {loaded && messages.length === 0 && (
+          <div className={panel ? "" : "card p-5"}>
+            <p className="text-sm text-slate-600">
+              Ask anything, tell me what to do, or drop in a file or voice note. I&apos;ll show you what I&apos;m about to save so you can confirm it.
             </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {SUGGESTIONS.map((s) => (
-                <button key={s} type="button" onClick={() => send(s, [])} className="rounded-full bg-brand-50 px-3 py-1.5 text-xs text-brand-700 hover:bg-brand-100">
-                  {s}
-                </button>
-              ))}
-            </div>
           </div>
         )}
         {messages.map((m) => (
           <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div className={`max-w-[92%] rounded-2xl px-4 py-2.5 sm:max-w-[80%] ${m.role === "user" ? "bg-brand-600 text-white" : "card"}`}>
+            <div className={`max-w-[92%] rounded-2xl px-3.5 py-2.5 ${m.role === "user" ? "bg-brand-600 text-white" : "bg-white ring-1 ring-slate-200"}`}>
               {m.attachments.length > 0 && <div className={`mb-1 text-xs ${m.role === "user" ? "text-brand-100" : "text-slate-500"}`}>📎 {m.attachments.map((a) => a.name).join(", ")}</div>}
               {m.role === "user" ? (
                 <p className="text-sm whitespace-pre-wrap">{m.content}</p>
               ) : m.pending ? (
-                <p className="text-sm text-slate-500">Thinking… <span className="text-xs">(you can leave this page — the answer will be here when you come back)</span></p>
+                <p className="flex items-center gap-2 text-sm text-slate-500">
+                  <span className="inline-flex gap-1">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-400" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-400 [animation-delay:120ms]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-400 [animation-delay:240ms]" />
+                  </span>
+                  Thinking…
+                </p>
               ) : (
                 <Md text={m.content} />
               )}
-              {m.proposals.map((p) => <ProposalCard key={p.id} p={p} />)}
+              {m.proposals.map((p) => <ProposalCard key={p.id} p={p} onDone={() => router.refresh()} />)}
             </div>
           </div>
         ))}
-        {sending && (
-          <div className="flex justify-start">
-            <div className="card px-4 py-3 text-sm text-slate-500">Thinking…</div>
-          </div>
-        )}
         <div ref={bottom} />
       </div>
 
-      <div className="sticky bottom-16 z-20 -mx-4 border-t border-slate-200 bg-slate-50/95 px-4 pt-3 pb-3 backdrop-blur sm:-mx-6 sm:px-6 lg:bottom-0 lg:-mx-8 lg:px-8">
+      <div className={panel ? "border-t border-slate-200 bg-white px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]" : "sticky bottom-16 z-20 -mx-4 border-t border-slate-200 bg-slate-50/95 px-4 pt-3 pb-3 backdrop-blur sm:-mx-6 sm:px-6 lg:bottom-0 lg:-mx-8 lg:px-8"}>
+        {messages.length < 3 && !text && (
+          <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1">
+            {suggestions.map((s) => (
+              <button key={s} type="button" onClick={() => send(s, [])} className="shrink-0 rounded-full bg-brand-50 px-3 py-1.5 text-xs text-brand-700 hover:bg-brand-100">
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
         {files.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-1.5">
             {files.map((f, i) => (
-              <span key={i} className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs ring-1 ring-slate-200">
+              <span key={i} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs">
                 📎 {f.name}
                 <button type="button" onClick={() => setFiles(files.filter((_, j) => j !== i))} className="text-slate-400 hover:text-rose-600" aria-label="Remove">✕</button>
               </span>
@@ -197,19 +237,19 @@ export function Chat({ initial, initialQuery }: { initial: ChatMessage[]; initia
             e.preventDefault();
             void send(text);
           }}
-          className="flex items-end gap-2"
+          className="flex items-end gap-1.5"
         >
           <input ref={fileInput} type="file" multiple accept=".pdf,image/*,.csv,.txt,.xlsx,audio/*" className="hidden" onChange={(e) => setFiles([...files, ...Array.from(e.target.files ?? [])])} />
-          <button type="button" onClick={() => fileInput.current?.click()} className="btn-secondary px-3" aria-label="Attach a file" title="Attach a file">📎</button>
+          <button type="button" onClick={() => fileInput.current?.click()} className="btn-ghost px-2.5" aria-label="Attach a file" title="Attach a file">📎</button>
           <button
             type="button"
             onClick={toggleRecording}
             disabled={sending}
-            className={`btn px-3 ${recording ? "animate-pulse bg-rose-600 text-white" : "btn-secondary"}`}
+            className={`btn px-2.5 ${recording ? "animate-pulse bg-rose-600 text-white" : "btn-ghost"}`}
             aria-label={recording ? "Stop recording" : "Record a voice note"}
             title={recording ? "Tap to stop and send" : "Record a voice note"}
           >
-            {recording ? "■ Stop" : "🎤"}
+            {recording ? "■" : "🎤"}
           </button>
           <textarea
             value={text}
@@ -221,12 +261,12 @@ export function Chat({ initial, initialQuery }: { initial: ChatMessage[]; initia
               }
             }}
             rows={1}
-            placeholder={recording ? "Recording… tap Stop to send" : 'Ask, or type "450 cab"…'}
+            placeholder={recording ? "Recording… tap ■ to send" : 'Ask, or type "450 cab"…'}
             className="input max-h-40 min-h-10 flex-1 resize-none"
           />
-          <button type="submit" disabled={sending || (!text.trim() && !files.length)} className="btn-primary">Send</button>
+          <button type="submit" disabled={sending || (!text.trim() && !files.length)} className="btn-primary px-3">↑</button>
         </form>
-        {messages.length > 0 && (
+        {messages.length > 0 && !panel && (
           <div className="mt-1 text-right">
             <button type="button" onClick={async () => { await clearChat(); setMessages([]); }} className="text-xs text-slate-400 hover:text-slate-600">Clear chat</button>
           </div>

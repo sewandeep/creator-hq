@@ -1,24 +1,30 @@
-// Menu items, shared by the server layout and the client navigation.
-export const NAV = [
-  { href: "/", label: "Home", group: "", icon: "M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" },
-  { href: "/ask", label: "Ask AI", group: "", icon: "M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9zM19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9z" },
-  { href: "/deals", label: "Deals", group: "Work", icon: "M4 5h4v14H4zM10 5h4v9h-4zM16 5h4v6h-4z" },
-  { href: "/leads", label: "Leads", group: "Work", icon: "M12 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm-7 17a7 7 0 0 1 14 0" },
-  { href: "/calendar", label: "Calendar", group: "Work", icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4" },
-  { href: "/brands", label: "Brands", group: "Work", icon: "M4 7h16v12H4zM9 7V4h6v3" },
-  { href: "/contacts", label: "Contacts", group: "Work", icon: "M12 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM5 20a7 7 0 0 1 14 0" },
-  { href: "/email", label: "Emails", group: "Work", icon: "M4 6h16v12H4zM4 7l8 6 8-6" },
-  { href: "/invoices", label: "Invoices", group: "Money", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6" },
-  { href: "/payments", label: "Payments", group: "Money", icon: "M3 7h18v10H3zM3 10h18M7 14h3" },
-  { href: "/tax", label: "TDS & 26AS", group: "Money", icon: "M9 14l6-6M9.5 8.5h.01M14.5 13.5h.01M5 3h14v18H5z" },
-  { href: "/insights", label: "Rate insights", group: "Money", icon: "M4 20V10M10 20V4M16 20v-7M22 20H2" },
-  { href: "/money", label: "Overview", group: "Personal money", icon: "M3 7h18v12H3zM16 13h2M3 10h18" },
-  { href: "/money/review", label: "Needs you", group: "Personal money", icon: "M12 8v5M12 16h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" },
-  { href: "/money/transactions", label: "Transactions", group: "Personal money", icon: "M4 6h16M4 12h16M4 18h10" },
-  { href: "/money/upload", label: "Upload statement", group: "Personal money", icon: "M12 16V4m0 0-4 4m4-4 4 4M4 20h16" },
-  { href: "/money/lending", label: "Lending", group: "Personal money", icon: "M7 11l5-5 5 5M12 6v12" },
-  { href: "/money/categories", label: "Categories", group: "Personal money", icon: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" },
-  { href: "/history", label: "History", group: "Records", icon: "M12 7v5l3 2M3.5 12a8.5 8.5 0 1 0 2.5-6" },
-  { href: "/import", label: "Import", group: "Records", icon: "M12 4v11m0 0-4-4m4 4 4-4M5 20h14" },
-  { href: "/settings", label: "Settings", group: "Records", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" },
+// The four main places, plus everything else under "More".
+export const MAIN_NAV = [
+  { href: "/", label: "Today", icon: "M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" },
+  { href: "/deals", label: "Work", icon: "M4 5h4v14H4zM10 5h4v9h-4zM16 5h4v6h-4z" },
+  { href: "/money", label: "Money", icon: "M3 7h18v12H3zM16 13h2M3 10h18" },
+  { href: "/reports", label: "Reports", icon: "M4 20V10M10 20V4M16 20v-7M22 20H2" },
 ];
+
+export const MORE_NAV = [
+  { href: "/calendar", label: "Calendar" },
+  { href: "/brands", label: "Brands" },
+  { href: "/contacts", label: "Contacts" },
+  { href: "/invoices", label: "Invoices" },
+  { href: "/email", label: "Emails" },
+  { href: "/import", label: "Import past work" },
+  { href: "/settings", label: "Settings" },
+  { href: "/setup", label: "Setup check" },
+];
+
+// Kept for older screens that list everything.
+export const NAV = [...MAIN_NAV.map((n) => ({ ...n, group: "" })), ...MORE_NAV.map((n) => ({ ...n, group: "More", icon: "" }))];
+
+/** Which main tab a page belongs to. */
+export function sectionOf(pathname: string) {
+  if (pathname === "/") return "/";
+  if (/^\/(deals|leads|brands|contacts|calendar|email|invoices)/.test(pathname)) return "/deals";
+  if (pathname.startsWith("/money")) return "/money";
+  if (/^\/(reports|history|insights|tax|payments)/.test(pathname)) return "/reports";
+  return "";
+}

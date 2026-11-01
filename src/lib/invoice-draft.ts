@@ -32,7 +32,7 @@ export async function itemsFromDeal(supabase: DB, dealId: string) {
 }
 
 /** Creates a draft invoice for a deal with your usual defaults. Returns its id and number. */
-export async function createDraftInvoiceFromDeal(supabase: DB, dealId: string) {
+export async function createDraftInvoiceFromDeal(supabase: DB, dealId: string, by = "by AI assistant") {
   const prepared = await itemsFromDeal(supabase, dealId);
   if (!prepared) throw new Error("Deal not found.");
   const { deal, items } = prepared;
@@ -68,6 +68,6 @@ export async function createDraftInvoiceFromDeal(supabase: DB, dealId: string) {
     .insert(items.map((it, position) => ({ invoice_id: inv.id, position, description: it.description, quantity: Number(it.quantity) || 1, rate: Number(it.rate) || 0 })));
   if (itemsError) throw new Error(itemsError.message);
   const total = items.reduce((t, i) => t + (Number(i.quantity) || 1) * (Number(i.rate) || 0), 0);
-  await supabase.from("activities").insert({ deal_id: deal.id, brand_id: deal.brand_id, kind: "invoice", body: `Invoice ${inv.invoice_number} drafted for ${rupees(total)} (by AI assistant)` });
+  await supabase.from("activities").insert({ deal_id: deal.id, brand_id: deal.brand_id, kind: "invoice", body: `Invoice ${inv.invoice_number} drafted for ${rupees(total)}${by ? ` (${by})` : ""}` });
   return inv;
 }
