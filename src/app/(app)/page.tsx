@@ -11,7 +11,7 @@ export default async function Dashboard() {
   const fy = fyOf(today);
   const { from, to } = fyRange(fy);
 
-  const [deals, followUps, deliverables, dealDeadlines, activity, openInvoices, fyPayments] = await Promise.all([
+  const [deals, followUps, deliverables, dealDeadlines, activity, openInvoices, fyPayments, toReview] = await Promise.all([
     supabase.from("deals").select("id, stage, amount, deal_date"),
     supabase
       .from("deals")
@@ -45,6 +45,7 @@ export default async function Dashboard() {
       .in("status", ["sent", "partially_paid"])
       .order("due_date"),
     supabase.from("payments").select("gross_amount, tds_amount").gte("received_date", from).lte("received_date", to),
+    supabase.from("transactions").select("id", { count: "exact", head: true }).eq("needs_review", true),
   ]);
   const unpaid = (openInvoices.data ?? []).map((i) => ({
     ...i,
@@ -87,6 +88,13 @@ export default async function Dashboard() {
   return (
     <>
       <PageHeader title="Home" subtitle={fmtDate(today)} />
+
+      {(toReview.count ?? 0) > 0 && (
+        <Link href="/money/review" className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 hover:bg-amber-100">
+          <span><b>{toReview.count}</b> bank transaction{toReview.count === 1 ? "" : "s"} need you to say what they were.</span>
+          <span className="font-medium">Review →</span>
+        </Link>
+      )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Active deals" value={rupees(sum(active))} hint={`${active.length} deals in progress`} href="/deals" />

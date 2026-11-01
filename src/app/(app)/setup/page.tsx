@@ -18,6 +18,11 @@ const MIGRATIONS = [
     label: "Phase 2 — invoices, payments, TDS, emails",
     tables: ["profile", "invoices", "invoice_items", "payments", "tds_checks", "email_templates", "email_log", "rate_card"],
   },
+  {
+    file: "supabase/migrations/20261102000000_phase3_finance.sql",
+    label: "Phase 3 — personal money, statements",
+    tables: ["bank_accounts", "statements", "categories", "category_rules", "transactions", "transaction_changes"],
+  },
 ] as const;
 
 type Check = { ok: boolean; warn?: boolean; title: string; detail?: React.ReactNode };
@@ -52,6 +57,7 @@ export default async function SetupPage() {
   }
 
   const { error: bucketError } = await supabase.storage.from("deal-files").list("", { limit: 1 });
+  const { error: stmtBucketError } = await supabase.storage.from("statements").list("", { limit: 1 });
   const { data: profile } = await supabase.from("profile").select("legal_name, pan, bank_account_number").maybeSingle();
 
   const checks: Check[] = [
@@ -59,6 +65,12 @@ export default async function SetupPage() {
     bucketError
       ? { ok: false, title: "File storage (briefs & contracts)", detail: `Storage isn't ready: ${bucketError.message}. Re-run the Phase 1 file in the SQL Editor.` }
       : { ok: true, title: "File storage (briefs & contracts)" },
+    stmtBucketError
+      ? { ok: false, title: "Statement storage", detail: `Storage for bank statements isn't ready: ${stmtBucketError.message}. Run the Phase 3 file in the SQL Editor.` }
+      : { ok: true, title: "Statement storage" },
+    process.env.GEMINI_API_KEY
+      ? { ok: true, title: "AI statement reader (Gemini key)" }
+      : { ok: false, warn: true, title: "AI statement reader (Gemini key)", detail: <>Not added yet — get a free key at <b>aistudio.google.com/apikey</b> and add it in Vercel as <code className="rounded bg-slate-100 px-1">GEMINI_API_KEY</code>, then redeploy.</> },
     profile?.legal_name && profile.pan
       ? { ok: true, title: "Your invoice details (name & PAN)" }
       : { ok: false, warn: true, title: "Your invoice details (name & PAN)", detail: <>Not filled in yet — <Link href="/settings" className="link">add them in Settings</Link>.</> },

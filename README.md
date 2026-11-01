@@ -11,7 +11,14 @@ Your private workspace for creator deals and (soon) personal finances.
 - Brand emails from templates, with a preview before sending and the invoice attached
 - Rate insights: what brands paid per piece, your rate card, who pays on time, monthly income
 
-**Coming next:** Phase 3 adds bank statements read by AI. Phase 4 adds the Telegram bot and reminders.
+**Phase 3 (done):**
+- Upload bank statement PDFs (Kotak, SBI and others, including password-protected ones)
+- AI reads every row; the running balance double-checks each one
+- A "Needs you" inbox for anything unclear; tick "Always use" and it remembers
+- Quick entries ("450 cab", "lent 2000 to rahul") are linked to the matching bank line, so nothing is counted twice
+- Monthly summary by category, payee and lending, plus a full change history on every transaction
+
+**Coming next:** Phase 4 adds the Telegram bot and reminders.
 
 ---
 
@@ -23,7 +30,11 @@ Your private workspace for creator deals and (soon) personal finances.
 3. Otherwise go to **SQL Editor**, then **New query**. Paste everything from
    [`supabase/migrations/20261101000000_phase1_crm.sql`](supabase/migrations/20261101000000_phase1_crm.sql) and press **Run**.
 
-   Do the same for **every file** in `supabase/migrations/`, in name order. Phase 2 added `20261101100000_phase2_money.sql`; if Table Editor has no `invoices` table, run that file.
+   Do the same for **every file** in `supabase/migrations/`, in name order:
+   - Phase 2: `20261101100000_phase2_money.sql`
+   - Phase 3: `20261102000000_phase3_finance.sql`
+
+   The app's **Setup check** page (`/setup`) shows which ones are still missing.
 
 ### 2. Create your login (only you)
 1. In Supabase, go to **Authentication**, then **Users**, then **Add user**, then **Create new user**.
@@ -54,7 +65,13 @@ Your private workspace for creator deals and (soon) personal finances.
 
 Without this, the email screen still works: it opens Gmail with everything filled in.
 
-### 5. Put it on your iPhone
+### 5. Turn on the AI statement reader (free)
+1. Go to **aistudio.google.com/apikey**, sign in with Google, and click **Create API key**.
+2. In Vercel, add the environment variable `GEMINI_API_KEY` with that key, then **Redeploy**.
+
+The app uses `gemini-3.8-flash` and falls back to `gemini-3.5-flash-lite` (which has a bigger free daily limit). To pin a model, set `GEMINI_MODEL`.
+
+### 6. Put it on your iPhone
 Open the link in **Safari**, tap **Share**, then **Add to Home Screen**. It opens like a normal app.
 
 ---

@@ -49,6 +49,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"bank_accounts": {
+                  Row: {
+                    "bank": string,"created_at": string,"id": string,"is_archived": boolean,"last4": string | null,"name": string,"pdf_password": string | null,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "bank"?: string,"created_at"?: string,"id"?: string,"is_archived"?: boolean,"last4"?: string | null,"name": string,"pdf_password"?: string | null,"user_id"?: string
+                  }
+                  Update: {
+                    "bank"?: string,"created_at"?: string,"id"?: string,"is_archived"?: boolean,"last4"?: string | null,"name"?: string,"pdf_password"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"brands": {
                   Row: {
                     "billing_address": string | null,"category": string | null,"created_at": string,"gstin": string | null,"id": string,"instagram": string | null,"legal_name": string | null,"name": string,"notes": string | null,"pan": string | null,"tan": string | null,"updated_at": string,"user_id": string,"website": string | null
@@ -62,6 +76,40 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"categories": {
+                  Row: {
+                    "created_at": string,"emoji": string | null,"id": string,"is_business": boolean,"kind": string,"name": string,"position": number,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"emoji"?: string | null,"id"?: string,"is_business"?: boolean,"kind": string,"name": string,"position"?: number,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"emoji"?: string | null,"id"?: string,"is_business"?: boolean,"kind"?: string,"name"?: string,"position"?: number,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"category_rules": {
+                  Row: {
+                    "category_id": string,"created_at": string,"direction": string | null,"hits": number,"id": string,"pattern": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "category_id": string,"created_at"?: string,"direction"?: string | null,"hits"?: number,"id"?: string,"pattern": string,"user_id"?: string
+                  }
+                  Update: {
+                    "category_id"?: string,"created_at"?: string,"direction"?: string | null,"hits"?: number,"id"?: string,"pattern"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "category_rules_category_id_fkey"
+      columns: ["category_id"]
+isOneToOne: false
+      referencedRelation: "categories"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"contacts": {
                   Row: {
@@ -301,6 +349,26 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"statements": {
+                  Row: {
+                    "account_id": string,"balance_ok": boolean | null,"closing_balance": number | null,"created_at": string,"error": string | null,"file_name": string,"file_path": string,"id": string,"issues": NonNullable<Json>,"model": string | null,"opening_balance": number | null,"period_from": string | null,"period_to": string | null,"processed_at": string | null,"rows_added": number | null,"rows_duplicate": number | null,"rows_found": number | null,"status": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "account_id": string,"balance_ok"?: boolean | null,"closing_balance"?: number | null,"created_at"?: string,"error"?: string | null,"file_name": string,"file_path": string,"id"?: string,"issues"?: NonNullable<Json>,"model"?: string | null,"opening_balance"?: number | null,"period_from"?: string | null,"period_to"?: string | null,"processed_at"?: string | null,"rows_added"?: number | null,"rows_duplicate"?: number | null,"rows_found"?: number | null,"status"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "account_id"?: string,"balance_ok"?: boolean | null,"closing_balance"?: number | null,"created_at"?: string,"error"?: string | null,"file_name"?: string,"file_path"?: string,"id"?: string,"issues"?: NonNullable<Json>,"model"?: string | null,"opening_balance"?: number | null,"period_from"?: string | null,"period_to"?: string | null,"processed_at"?: string | null,"rows_added"?: number | null,"rows_duplicate"?: number | null,"rows_found"?: number | null,"status"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "statements_account_id_fkey"
+      columns: ["account_id"]
+isOneToOne: false
+      referencedRelation: "bank_accounts"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"tds_checks": {
                   Row: {
                     "amount_in_26as": number | null,"brand_id": string,"checked_on": string,"fy": number,"id": string,"notes": string | null,"tds_in_26as": number | null,"updated_at": string,"user_id": string
@@ -318,6 +386,76 @@ isOneToOne: false
       columns: ["brand_id"]
 isOneToOne: false
       referencedRelation: "brands"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"transaction_changes": {
+                  Row: {
+                    "created_at": string,"field": string,"id": string,"new_value": string | null,"old_value": string | null,"source": string,"transaction_id": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"field": string,"id"?: string,"new_value"?: string | null,"old_value"?: string | null,"source": string,"transaction_id": string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"field"?: string,"id"?: string,"new_value"?: string | null,"old_value"?: string | null,"source"?: string,"transaction_id"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "transaction_changes_transaction_id_fkey"
+      columns: ["transaction_id"]
+isOneToOne: false
+      referencedRelation: "transactions"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"transactions": {
+                  Row: {
+                    "account_id": string | null,"amount": number,"balance": number | null,"category_id": string | null,"category_reason": string | null,"category_source": string,"confidence": number | null,"counterparty": string | null,"created_at": string,"dedupe_key": string | null,"description": string,"direction": string,"id": string,"is_cash": boolean,"matched_txn_id": string | null,"needs_review": boolean,"note": string | null,"payment_id": string | null,"person": string | null,"reference": string | null,"review_reason": string | null,"seq": number | null,"source": string,"statement_id": string | null,"suggested_invoice_id": string | null,"txn_date": string,"updated_at": string,"upi_id": string | null,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "account_id"?: string | null,"amount": number,"balance"?: number | null,"category_id"?: string | null,"category_reason"?: string | null,"category_source"?: string,"confidence"?: number | null,"counterparty"?: string | null,"created_at"?: string,"dedupe_key"?: string | null,"description": string,"direction": string,"id"?: string,"is_cash"?: boolean,"matched_txn_id"?: string | null,"needs_review"?: boolean,"note"?: string | null,"payment_id"?: string | null,"person"?: string | null,"reference"?: string | null,"review_reason"?: string | null,"seq"?: number | null,"source"?: string,"statement_id"?: string | null,"suggested_invoice_id"?: string | null,"txn_date": string,"updated_at"?: string,"upi_id"?: string | null,"user_id"?: string
+                  }
+                  Update: {
+                    "account_id"?: string | null,"amount"?: number,"balance"?: number | null,"category_id"?: string | null,"category_reason"?: string | null,"category_source"?: string,"confidence"?: number | null,"counterparty"?: string | null,"created_at"?: string,"dedupe_key"?: string | null,"description"?: string,"direction"?: string,"id"?: string,"is_cash"?: boolean,"matched_txn_id"?: string | null,"needs_review"?: boolean,"note"?: string | null,"payment_id"?: string | null,"person"?: string | null,"reference"?: string | null,"review_reason"?: string | null,"seq"?: number | null,"source"?: string,"statement_id"?: string | null,"suggested_invoice_id"?: string | null,"txn_date"?: string,"updated_at"?: string,"upi_id"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "transactions_account_id_fkey"
+      columns: ["account_id"]
+isOneToOne: false
+      referencedRelation: "bank_accounts"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "transactions_category_id_fkey"
+      columns: ["category_id"]
+isOneToOne: false
+      referencedRelation: "categories"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "transactions_matched_txn_id_fkey"
+      columns: ["matched_txn_id"]
+isOneToOne: false
+      referencedRelation: "transactions"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "transactions_payment_id_fkey"
+      columns: ["payment_id"]
+isOneToOne: false
+      referencedRelation: "payments"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "transactions_statement_id_fkey"
+      columns: ["statement_id"]
+isOneToOne: false
+      referencedRelation: "statements"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "transactions_suggested_invoice_id_fkey"
+      columns: ["suggested_invoice_id"]
+isOneToOne: false
+      referencedRelation: "invoices"
       referencedColumns: ["id"]
     }
                   ]

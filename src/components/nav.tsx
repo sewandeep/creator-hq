@@ -7,10 +7,13 @@ import { NAV } from "@/lib/nav-items";
 
 
 // The five that fit on the phone's bottom bar.
-const MOBILE = ["/", "/deals", "/leads", "/invoices", "/calendar"];
+const MOBILE = ["/", "/deals", "/leads", "/invoices", "/money"];
 
 function isActive(pathname: string, href: string) {
-  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+  if (href === "/") return pathname === "/";
+  // "Overview" (/money) shouldn't light up on the other /money pages that have their own menu item.
+  if (href === "/money") return pathname === "/money" || ["/money/add", "/money/statements"].some((p) => pathname.startsWith(p));
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 function Icon({ d }: { d: string }) {
@@ -60,7 +63,7 @@ export function BottomNav() {
           }`}
         >
           <Icon d={item.icon} />
-          {item.label}
+          {item.href === "/money" ? "Money" : item.label}
         </Link>
       ))}
     </nav>
