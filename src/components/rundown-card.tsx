@@ -1,23 +1,47 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
 import { generateRundown } from "@/app/actions/ai";
 import { Md } from "./md";
 
-export function RundownCard({ text, when }: { text: string | null; when: string | null }) {
+export function RundownCard({ text, when, createdAt }: { text: string | null; when: string | null; createdAt?: string | null }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [waitingSince, setWaitingSince] = useState<string | null>(null);
+  const router = useRouter();
+  const writing = Boolean(waitingSince && (!createdAt || createdAt < waitingSince));
+
+  // While the rundown is being written in the background, refresh every few seconds.
+  useEffect(() => {
+    if (!writing) return;
+    const started = Date.now();
+    const t = setInterval(() => {
+      if (Date.now() - started > 4 * 60_000) {
+        clearInterval(t);
+        setWaitingSince(null);
+        setError("Still not ready — reload the page in a minute.");
+      } else router.refresh();
+    }, 3000);
+    return () => clearInterval(t);
+  }, [writing, router]);
   return (
     <section className="card">
       <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
         <h2 className="text-sm font-semibold text-slate-800">✨ Weekly rundown</h2>
         <button
           type="button"
-          disabled={pending}
-          onClick={() => start(async () => setError((await generateRundown()).error ?? null))}
+          disabled={pending || writing}
+          onClick={() =>
+            start(async () => {
+              const r = await generateRundown();
+              setError(r.error ?? null);
+              if (r.since) setWaitingSince(r.since);
+            })
+          }
           className="text-xs font-medium text-brand-600 hover:underline disabled:opacity-50"
         >
-          {pending ? "Writing…" : text ? "Refresh" : "Write one now"}
+          {pending || writing ? "Writing… (about a minute)" : text ? "Refresh" : "Write one now"}
         </button>
       </div>
       <div className="p-4">

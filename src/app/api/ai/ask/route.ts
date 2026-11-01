@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { runAssistant } from "@/lib/ai/assistant";
@@ -8,6 +8,7 @@ import { quickAddCore } from "@/lib/finance/entries";
 import { AiError } from "@/lib/finance/gemini";
 import { todayIST } from "@/lib/format";
 import { FormError } from "@/lib/forms";
+import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
 
 // The AI may look things up several times before answering.
 export const maxDuration = 300;
@@ -47,11 +48,29 @@ async function handle(req: Request) {
       revalidatePath("/", "layout");
       return NextResponse.json({ reply: `✅ ${r.message}`, proposals: [], quick: true, transactionId: r.id });
     }
-    const r = await runAssistant(supabase, userId, { text, files, channel: "app" });
-    const { data: proposals } = r.proposals.length
-      ? await supabase.from("ai_proposals").select("id, kind, summary, payload, status, result").in("id", r.proposals.map((p) => p.id))
-      : { data: [] };
-    return NextResponse.json({ reply: r.reply, proposals: proposals ?? [] });
+    // Save the message now, answer instantly, and let the AI work in the
+    // background — so a slow answer can't drop the connection on a phone.
+    const now = Date.now();
+    const { data: rows, error } = await supabase
+      .from("ai_messages")
+      .insert([
+        { channel: "app", role: "user", content: text.trim() || "(sent a file)", attachments: files.map((f) => ({ name: f.name })), created_at: new Date(now).toISOString() },
+        { channel: "app", role: "assistant", content: "", attachments: [{ pending: true }], created_at: new Date(now + 1).toISOString() },
+      ])
+      .select("id, role");
+    if (error || !rows) throw new Error(error?.message ?? "Couldn't save your message.");
+    const saved = { userMessageId: rows.find((r) => r.role === "user")!.id, replyMessageId: rows.find((r) => r.role === "assistant")!.id };
+    const db = isAdminConfigured() ? createAdminClient(userId) : supabase;
+
+    after(async () => {
+      try {
+        await runAssistant(db, userId, { text, files, channel: "app", saved });
+      } catch (e) {
+        const message = e instanceof AiError || e instanceof FormError ? e.message : `Something went wrong: ${e instanceof Error ? e.message : String(e)}`;
+        await db.from("ai_messages").update({ content: `⚠️ ${message}`, attachments: [] }).eq("id", saved.replyMessageId);
+      }
+    });
+    return NextResponse.json({ pending: saved.replyMessageId });
   } catch (e) {
     const message = e instanceof AiError || e instanceof FormError ? e.message : `Something went wrong: ${e instanceof Error ? e.message : String(e)}`;
     return NextResponse.json({ error: message }, { status: 200 });

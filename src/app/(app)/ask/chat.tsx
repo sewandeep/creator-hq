@@ -5,7 +5,16 @@ import { clearChat } from "@/app/actions/ai";
 import { Md } from "@/components/md";
 import { ProposalCard, type Proposal } from "./proposal-card";
 
-export type ChatMessage = { id: string; role: "user" | "assistant"; content: string; attachments: { name: string; kind?: string }[]; proposals: Proposal[] };
+export type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  attachments: { name: string; kind?: string }[];
+  proposals: Proposal[];
+  pending?: boolean;
+};
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const SUGGESTIONS = [
   "How much did I spend this month, and on what?",
@@ -61,13 +70,16 @@ export function Chat({ initial, initialQuery }: { initial: ChatMessage[]; initia
         try {
           return JSON.parse(raw);
         } catch {
-          // Not JSON = the server crashed or timed out. Show what it said.
-          const hint = x.status === 504 ? "The AI took too long to answer (timed out). Try again, or ask something shorter." : `Server error ${x.status}.`;
-          return { error: `${hint} ${raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200)}` };
+          return { error: `Server error ${x.status}. ${raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200)}` };
         }
       })
-      .catch((e) => ({ error: `Couldn't reach the app (${e instanceof Error ? e.message : "network error"}). Check your connection and try again.` }));
-    setMessages((m) => [...m, { id: `a${Date.now()}`, role: "assistant", content: r.error ? `⚠️ ${r.error}` : r.reply, attachments: [], proposals: r.proposals ?? [] }]);
+      .catch((e) => ({ error: `Couldn't send your message (${e instanceof Error ? e.message : "network error"}). Check your connection and try again.` }));
+    if (r.pending) {
+      // The AI is working in the background; the answer is picked up below.
+      setMessages((m) => [...m, { id: r.pending, role: "assistant", content: "", attachments: [], proposals: [], pending: true }]);
+    } else {
+      setMessages((m) => [...m, { id: `a${Date.now()}`, role: "assistant", content: r.error ? `⚠️ ${r.error}` : r.reply, attachments: [], proposals: r.proposals ?? [] }]);
+    }
     setSending(false);
   }
 
@@ -78,6 +90,30 @@ export function Chat({ initial, initialQuery }: { initial: ChatMessage[]; initia
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery]);
+
+  // Pick up answers the AI is still working on (also after a reload).
+  const waiting = messages.filter((m) => m.pending).map((m) => m.id).join(",");
+  useEffect(() => {
+    if (!waiting) return;
+    let stop = false;
+    void (async () => {
+      const started = Date.now();
+      for (const id of waiting.split(",")) {
+        while (!stop) {
+          await sleep(Date.now() - started < 20_000 ? 1500 : 3000);
+          const r = await fetch(`/api/ai/messages/${id}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+          if (stop) return;
+          if (r && !r.pending) {
+            setMessages((m) => m.map((x) => (x.id === id ? { ...x, content: r.content, proposals: r.proposals ?? [], pending: false } : x)));
+            break;
+          }
+        }
+      }
+    })();
+    return () => {
+      stop = true;
+    };
+  }, [waiting]);
 
   async function toggleRecording() {
     if (recording) {
@@ -126,7 +162,13 @@ export function Chat({ initial, initialQuery }: { initial: ChatMessage[]; initia
           <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`max-w-[92%] rounded-2xl px-4 py-2.5 sm:max-w-[80%] ${m.role === "user" ? "bg-brand-600 text-white" : "card"}`}>
               {m.attachments.length > 0 && <div className={`mb-1 text-xs ${m.role === "user" ? "text-brand-100" : "text-slate-500"}`}>📎 {m.attachments.map((a) => a.name).join(", ")}</div>}
-              {m.role === "user" ? <p className="text-sm whitespace-pre-wrap">{m.content}</p> : <Md text={m.content} />}
+              {m.role === "user" ? (
+                <p className="text-sm whitespace-pre-wrap">{m.content}</p>
+              ) : m.pending ? (
+                <p className="text-sm text-slate-500">Thinking… <span className="text-xs">(you can leave this page — the answer will be here when you come back)</span></p>
+              ) : (
+                <Md text={m.content} />
+              )}
               {m.proposals.map((p) => <ProposalCard key={p.id} p={p} />)}
             </div>
           </div>

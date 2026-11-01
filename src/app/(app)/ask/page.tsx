@@ -20,8 +20,9 @@ export default async function AskPage({ searchParams }: { searchParams: Promise<
     id: m.id,
     role: m.role as "user" | "assistant",
     content: m.content,
-    attachments: (Array.isArray(m.attachments) ? m.attachments : []) as ChatMessage["attachments"],
+    attachments: (Array.isArray(m.attachments) ? m.attachments.filter((a) => a !== null && typeof a === "object" && "name" in a) : []) as ChatMessage["attachments"],
     proposals: m.proposal_ids.map((id) => byId.get(id)).filter((p): p is Proposal => Boolean(p)),
+    pending: Array.isArray(m.attachments) && m.attachments.some((a) => a !== null && typeof a === "object" && "pending" in a),
   }));
 
   return (

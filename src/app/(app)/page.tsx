@@ -201,7 +201,7 @@ export default async function Dashboard() {
         </Card>
 
         <div className="lg:col-span-2">
-          <RundownCard text={rundown.data?.content ?? null} when={rundown.data ? `Written ${fmtDateTime(rundown.data.created_at)}` : null} />
+          <RundownCard text={rundown.data?.content ?? null} when={rundown.data ? `Written ${fmtDateTime(rundown.data.created_at)}` : null} createdAt={rundown.data?.created_at ?? null} />
         </div>
 
         <Card title="Recent activity">

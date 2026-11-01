@@ -36,7 +36,17 @@ How to work:
 }
 
 /** One assistant turn: the user's message (+ files) → reply, with any prepared actions. */
-export async function runAssistant(db: DB, userId: string, input: { text: string; files?: InFile[]; channel: "app" | "telegram" | "rundown" }): Promise<AssistantReply> {
+export async function runAssistant(
+  db: DB,
+  userId: string,
+  input: {
+    text: string;
+    files?: InFile[];
+    channel: "app" | "telegram" | "rundown";
+    /** Already-saved chat rows for this turn (the app saves them up front). */
+    saved?: { userMessageId: string; replyMessageId: string };
+  },
+): Promise<AssistantReply> {
   const { data: profile } = await db.from("profile").select("display_name, legal_name").eq("user_id", userId).maybeSingle();
   // File reading (PDF, Excel) is only loaded when a file is actually sent.
   const prepared = input.files?.length
@@ -49,6 +59,8 @@ export async function runAssistant(db: DB, userId: string, input: { text: string
     .select("role, content")
     .eq("user_id", userId)
     .eq("channel", input.channel)
+    .not("id", "in", `(${input.saved ? [input.saved.userMessageId, input.saved.replyMessageId].join(",") : "00000000-0000-0000-0000-000000000000"})`)
+    .neq("content", "")
     .order("created_at", { ascending: false })
     .limit(8);
   const contents: GeminiContent[] = (history ?? [])
@@ -90,6 +102,16 @@ export async function runAssistant(db: DB, userId: string, input: { text: string
   if (!reply) reply = ctx.proposals.length ? "I've prepared that below — check it and tap Confirm." : "Sorry, that took too many steps. Could you ask more specifically?";
 
   // Save the exchange (not for automatic rundowns' prompt).
+  if (input.saved) {
+    await db
+      .from("ai_messages")
+      .update({ content: reply, proposal_ids: ctx.proposals.map((p) => p.id), attachments: [] })
+      .eq("id", input.saved.replyMessageId);
+    if (prepared.refs.length) {
+      await db.from("ai_messages").update({ attachments: prepared.refs.map((r) => ({ name: r.name, kind: r.kind })) as unknown as NonNullable<Json> }).eq("id", input.saved.userMessageId);
+    }
+    return { reply, proposals: ctx.proposals, model };
+  }
   if (input.channel !== "rundown") {
     await db.from("ai_messages").insert({
       channel: input.channel,

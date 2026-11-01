@@ -1,19 +1,25 @@
 "use server";
 
+import { after } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
 import { RUNDOWN_PROMPT, runAssistant } from "@/lib/ai/assistant";
 import { AiError } from "@/lib/finance/gemini";
 import { refreshAll } from "./helpers";
 
-export async function generateRundown(): Promise<{ ok?: boolean; error?: string }> {
+/** Starts writing a rundown in the background (the Home card refreshes until it appears). */
+export async function generateRundown(): Promise<{ ok?: boolean; error?: string; since?: string }> {
   const { supabase, userId } = await requireUser();
-  try {
-    await runAssistant(supabase, userId, { text: RUNDOWN_PROMPT, channel: "rundown" });
-  } catch (e) {
-    return { error: e instanceof AiError ? e.message : String(e) };
-  }
-  refreshAll();
-  return { ok: true };
+  const since = new Date().toISOString();
+  const db = isAdminConfigured() ? createAdminClient(userId) : supabase;
+  after(async () => {
+    try {
+      await runAssistant(db, userId, { text: RUNDOWN_PROMPT, channel: "rundown" });
+    } catch (e) {
+      await db.from("ai_messages").insert({ channel: "rundown", role: "assistant", content: `⚠️ Couldn't write the rundown: ${e instanceof AiError ? e.message : String(e)}` });
+    }
+  });
+  return { ok: true, since };
 }
 
 export async function clearChat() {

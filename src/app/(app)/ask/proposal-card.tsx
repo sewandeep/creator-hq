@@ -58,7 +58,7 @@ export function ProposalCard({ p: initial }: { p: Proposal }) {
     const editPayload = Object.fromEntries(
       Object.entries(edits).map(([k, v]) => [k, fields.find((f) => f.key === k)?.type === "number" ? (v === "" ? null : Number(v)) : v || null]),
     );
-    const r = await fetch(`/api/ai/proposals/${p.id}`, {
+    let r = await fetch(`/api/ai/proposals/${p.id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action, edits: editPayload, password: password || undefined }),
@@ -68,10 +68,28 @@ export function ProposalCard({ p: initial }: { p: Proposal }) {
         try {
           return JSON.parse(raw);
         } catch {
-          return { ok: false, message: x.status === 504 ? "That took too long (timed out) — try again." : `Server error ${x.status}: ${raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160)}` };
+          return { ok: false, message: `Server error ${x.status}: ${raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160)}` };
         }
       })
       .catch(() => ({ ok: false, message: "Couldn't reach the app — try again." }));
+    // The work happens in the background; wait for it to finish.
+    if (r.working) {
+      // Check every 2 seconds for up to 6 minutes.
+      for (let attempt = 0; attempt < 180; attempt++) {
+        await new Promise((res) => setTimeout(res, 2000));
+        const s = await fetch(`/api/ai/proposals/${p.id}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+        if (!s) continue;
+        if (s.result?.needsPassword) {
+          r = { needsPassword: true, message: s.result.message };
+          break;
+        }
+        if (s.status !== "pending") {
+          r = s.status === "applied" ? { ...s.result, ok: true } : { ok: false, message: s.result?.message ?? "That didn't work." };
+          break;
+        }
+      }
+      if (r.working) r = { ok: false, message: "This is taking very long — check back in a minute (reload the page)." };
+    }
     setBusy(false);
     if (action === "cancel") return setP({ ...p, status: "cancelled" });
     if (r.needsPassword) {
