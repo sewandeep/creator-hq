@@ -70,7 +70,7 @@ export default async function ComposePage({ searchParams }: { searchParams: Prom
         brandId={brandId}
         dealId={deal?.id ?? null}
         configured={Boolean(mail)}
-        fromLine={mail ? `${fromName ? `${fromName} ` : ""}<${mail.user}>` : "Your Gmail"}
+        fromLine={mail ? `${fromName ? `${fromName} ` : ""}<${mail.from}>` : "Your Gmail"}
         backHref={backHref}
       />
     </div>

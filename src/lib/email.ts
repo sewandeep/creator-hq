@@ -1,18 +1,21 @@
 import "server-only";
 import nodemailer from "nodemailer";
 
-// Emails go out through your own Gmail, using a Gmail "App Password".
-// Set GMAIL_USER and GMAIL_APP_PASSWORD in Vercel's environment variables.
-// (SMTP_HOST / SMTP_PORT / SMTP_SECURE can point it at another mail server.)
+// Emails go out through your own mailbox over SMTP.
+// Simplest: Gmail / Google Workspace with an App Password —
+//   GMAIL_USER (your address) + GMAIL_APP_PASSWORD.
+// Any other provider (e.g. Brevo, Zoho, Resend) works too —
+//   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD and EMAIL_FROM (the address brands see).
 
 export function emailConfig() {
-  const user = process.env.GMAIL_USER?.trim();
-  const pass = process.env.GMAIL_APP_PASSWORD?.replace(/\s+/g, "");
+  const from = (process.env.EMAIL_FROM || process.env.GMAIL_USER || "").trim();
+  const user = (process.env.SMTP_USER || process.env.GMAIL_USER || "").trim();
+  const pass = (process.env.SMTP_PASSWORD || process.env.GMAIL_APP_PASSWORD || "").replace(/\s+/g, "");
   const host = process.env.SMTP_HOST?.trim() || "smtp.gmail.com";
-  if (!user || (!pass && host === "smtp.gmail.com")) return null;
+  if (!from || !user || (!pass && host === "smtp.gmail.com")) return null;
   const port = Number(process.env.SMTP_PORT || 465);
   const secure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : port === 465;
-  return { user, pass: pass ?? "", host, port, secure };
+  return { from, user, pass, host, port, secure };
 }
 
 export function isEmailConfigured() {
@@ -28,7 +31,7 @@ export async function sendMail(input: {
   attachments?: { filename: string; content: Buffer; contentType?: string }[];
 }) {
   const cfg = emailConfig();
-  if (!cfg) throw new Error("Email sending isn't set up yet (GMAIL_USER / GMAIL_APP_PASSWORD).");
+  if (!cfg) throw new Error("Email sending isn't set up yet (see Settings → Email sending).");
   const transport = nodemailer.createTransport({
     host: cfg.host,
     port: cfg.port,
@@ -37,7 +40,8 @@ export async function sendMail(input: {
   });
   const fromName = input.fromName.replace(/["<>]/g, "").trim();
   return transport.sendMail({
-    from: fromName ? `"${fromName}" <${cfg.user}>` : cfg.user,
+    from: fromName ? `"${fromName}" <${cfg.from}>` : cfg.from,
+    replyTo: cfg.from,
     to: input.to,
     cc: input.cc.length ? input.cc : undefined,
     subject: input.subject,

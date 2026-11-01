@@ -54,7 +54,7 @@ Your private workspace for creator deals and (soon) personal finances.
 3. Press **Deploy**. You'll get a link like `creator-hq-xxxx.vercel.app`.
 
 ### 4. Connect Gmail so the app can send emails (optional but recommended)
-1. In your Google Account, go to **Security** and turn on **2-Step Verification**.
+1. In your Google Account, go to **Security** and turn on **2-Step Verification**, using your phone or Google Authenticator (not only a security key or passkey). For a Google Workspace address (like name@sajilo.in), an admin may first need to allow it: **admin.google.com**, then **Security**, then **Authentication**, then **2-step verification**, then tick "Allow users to turn on 2-Step Verification".
 2. Open **myaccount.google.com/apppasswords**, create one called "Creator HQ", and copy the 16 letters.
 3. In Vercel, go to **Settings**, then **Environment Variables**, and add:
    | Name | Value |
@@ -64,6 +64,13 @@ Your private workspace for creator deals and (soon) personal finances.
 4. Go to **Deployments**, then **Redeploy**. **Settings** in the app should now say "Connected".
 
 Without this, the email screen still works: it opens Gmail with everything filled in.
+
+**No app passwords available?** Use any email service that supports SMTP instead (for example Brevo, Zoho or Resend). Set these in Vercel:
+- `SMTP_HOST`
+- `SMTP_PORT` (usually 465 or 587)
+- `SMTP_USER`
+- `SMTP_PASSWORD`
+- `EMAIL_FROM` (the address brands will see)
 
 ### 5. Turn on the AI statement reader (free)
 1. Go to **aistudio.google.com/apikey**, sign in with Google, and click **Create API key**.

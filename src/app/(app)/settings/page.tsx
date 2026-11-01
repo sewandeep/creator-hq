@@ -77,19 +77,27 @@ export default async function SettingsPage() {
       <Card title="Email sending" action={mail ? <Badge tone="green">Connected</Badge> : <Badge tone="amber">Not set up</Badge>}>
         {mail ? (
           <p className="text-sm text-slate-700">
-            Emails are sent from <span className="font-medium">{mail.user}</span>. They also appear in your Gmail &quot;Sent&quot; folder.
+            Emails are sent from <span className="font-medium">{mail.from}</span>. They also appear in your Gmail &quot;Sent&quot; folder.
           </p>
         ) : (
           <div className="space-y-2 text-sm text-slate-700">
             <p>To send invoices and emails straight from here, connect your Gmail once:</p>
             <ol className="list-decimal space-y-1 pl-5">
-              <li>Turn on <b>2-Step Verification</b> in your Google Account (Security).</li>
-              <li>Open <b>myaccount.google.com/apppasswords</b>, create an app password named &quot;Creator HQ&quot;, and copy the 16 letters.</li>
               <li>
-                In Vercel → your project → <b>Settings → Environment Variables</b>, add <code className="rounded bg-slate-100 px-1">GMAIL_USER</code> (your Gmail address) and{" "}
+                Turn on <b>2-Step Verification</b> at myaccount.google.com/security, using your <b>phone or Google Authenticator</b> (not only a security key or passkey).
+                For a work address like name@yourcompany.in, the Workspace admin may first need to allow it: admin.google.com → Security → Authentication → 2-step verification → &quot;Allow users to turn on 2-Step Verification&quot;.
+              </li>
+              <li>Open <b>myaccount.google.com/apppasswords</b>, create one named &quot;Creator HQ&quot;, and copy the 16 letters.</li>
+              <li>
+                In Vercel → your project → <b>Settings → Environment Variables</b>, add <code className="rounded bg-slate-100 px-1">GMAIL_USER</code> (your email address) and{" "}
                 <code className="rounded bg-slate-100 px-1">GMAIL_APP_PASSWORD</code> (the 16 letters), then <b>Redeploy</b>.
               </li>
             </ol>
+            <p className="text-slate-500">
+              If Google still won&apos;t offer app passwords, any email service with SMTP works instead: set <code className="rounded bg-slate-100 px-1">SMTP_HOST</code>,{" "}
+              <code className="rounded bg-slate-100 px-1">SMTP_PORT</code>, <code className="rounded bg-slate-100 px-1">SMTP_USER</code>, <code className="rounded bg-slate-100 px-1">SMTP_PASSWORD</code> and{" "}
+              <code className="rounded bg-slate-100 px-1">EMAIL_FROM</code>.
+            </p>
             <p className="text-slate-500">Until then, the email screen gives you an &quot;Open in Gmail&quot; button instead.</p>
           </div>
         )}
