@@ -4,10 +4,8 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { rupees, todayIST } from "@/lib/format";
 import { FormError, bool, date, money, oneOf, requiredText, text, toActionError, type ActionState } from "@/lib/forms";
-import { matchText, suggestPattern } from "@/lib/finance/categorize";
-import { addEntry, logChange } from "@/lib/finance/entries";
+import { addEntry, applyCategory, logChange, quickAddCore, type SetCategoryInput, type SetCategoryResult } from "@/lib/finance/entries";
 import { ensureCategories } from "@/lib/finance/categories-server";
-import { parseQuickEntry } from "@/lib/finance/quick-add";
 import { round2 } from "@/lib/money";
 import { refreshAll } from "./helpers";
 
@@ -73,83 +71,13 @@ export async function deleteStatement(id: string) {
 // ---------------------------------------------------------------------------
 // Categorising
 // ---------------------------------------------------------------------------
-export type SetCategoryResult = { ok?: boolean; error?: string; alsoUpdated?: number };
+export type { SetCategoryResult };
 
-/**
- * Set a transaction's category. With `remember`, also creates a rule
- * ("always put <payee> under <category>") and applies it to every other
- * matching transaction you haven't set by hand.
- */
-export async function setCategory(input: {
-  transactionId: string;
-  categoryId: string | null;
-  remember?: boolean;
-  pattern?: string;
-  note?: string | null;
-  person?: string | null;
-}): Promise<SetCategoryResult> {
+export async function setCategory(input: SetCategoryInput): Promise<SetCategoryResult> {
   const { supabase } = await requireUser();
-  const categories = await ensureCategories(supabase);
-  const name = (id: string | null) => categories.find((c) => c.id === id)?.name ?? null;
-  const { data: t, error } = await supabase
-    .from("transactions")
-    .select("id, category_id, direction, description, counterparty, upi_id, note, person, matched_txn_id, source")
-    .eq("id", input.transactionId)
-    .single();
-  if (error || !t) return { error: "Transaction not found." };
-  if (input.categoryId && !categories.some((c) => c.id === input.categoryId)) return { error: "Unknown category." };
-
-  const update: { category_id: string | null; category_source: "user"; category_reason: string; needs_review: boolean; review_reason: null; note?: string | null; person?: string | null } = {
-    category_id: input.categoryId,
-    category_source: "user",
-    category_reason: "You set this",
-    needs_review: false,
-    review_reason: null,
-  };
-  if (input.note !== undefined) update.note = input.note?.trim() || null;
-  if (input.person !== undefined) update.person = input.person?.trim() || null;
-  const { error: upError } = await supabase.from("transactions").update(update).eq("id", t.id);
-  if (upError) return { error: upError.message };
-  await logChange(supabase, t.id, "category", name(t.category_id), name(input.categoryId), "user");
-  if (update.note !== undefined) await logChange(supabase, t.id, "note", t.note, update.note, "user");
-  if (update.person !== undefined) await logChange(supabase, t.id, "person", t.person, update.person, "user");
-
-  let alsoUpdated = 0;
-  if (input.remember && input.categoryId) {
-    const pattern = (input.pattern?.trim() || suggestPattern(t)).toLowerCase().slice(0, 80);
-    if (pattern.length < 2) return { error: "That payee name is too short to remember." };
-    const { data: existing } = await supabase.from("category_rules").select("id").ilike("pattern", pattern).eq("direction", t.direction).maybeSingle();
-    if (existing) await supabase.from("category_rules").update({ category_id: input.categoryId }).eq("id", existing.id);
-    else await supabase.from("category_rules").insert({ pattern, direction: t.direction, category_id: input.categoryId });
-
-    // Apply to past transactions that you haven't set by hand.
-    const lendingPerson = categories.find((c) => c.id === input.categoryId)?.kind === "lending" ? (update.person ?? t.person) : null;
-    const { data: others } = await supabase
-      .from("transactions")
-      .select("id, category_id, description, counterparty, upi_id, note, person")
-      .eq("direction", t.direction)
-      .neq("category_source", "user")
-      .neq("id", t.id)
-      .limit(5000);
-    for (const o of others ?? []) {
-      if (!matchText(o).includes(pattern) || o.category_id === input.categoryId) continue;
-      await supabase
-        .from("transactions")
-        .update({
-          category_id: input.categoryId,
-          category_source: "rule",
-          category_reason: `Your rule: anything containing "${pattern}"`,
-          needs_review: false,
-          review_reason: null,
-          ...(lendingPerson && !o.person ? { person: lendingPerson } : {}),
-        })
-        .eq("id", o.id);
-      await logChange(supabase, o.id, "category", name(o.category_id), name(input.categoryId), "rule");
-      alsoUpdated++;
-    }
-  }
-  refreshAll();
-  return { ok: true, alsoUpdated };
+  const r = await applyCategory(supabase, input);
+  if (r.ok) refreshAll();
+  return r;
 }
 
 /** Keep the AI's guess and take it off the review list. */
@@ -198,26 +126,9 @@ export type AddEntryResult = { ok?: boolean; error?: string; message?: string };
 export async function quickAdd(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const { supabase } = await requireUser();
   try {
-    const raw = requiredText(fd, "text", "Entry");
-    const parsed = parseQuickEntry(raw, todayIST());
-    if (!parsed) throw new FormError('Couldn\'t find an amount. Try "450 cab" or "lent 2000 to rahul".');
-    const categories = await ensureCategories(supabase);
-    const chosen = text(fd, "category_id");
-    const hint = parsed.categoryHint ? categories.find((c) => c.name === parsed.categoryHint)?.id ?? null : null;
-    // Your rules apply to typed entries too.
-    const { data: rules } = await supabase.from("category_rules").select("pattern, direction, category_id");
-    const rule = (rules ?? []).sort((a, b) => b.pattern.length - a.pattern.length).find((r) => (!r.direction || r.direction === parsed.direction) && raw.toLowerCase().includes(r.pattern.toLowerCase()));
-    const res = await addEntry(supabase, {
-      ...parsed,
-      categoryId: chosen ?? rule?.category_id ?? hint,
-      source: "manual",
-    });
-    const cat = categories.find((c) => c.id === (chosen ?? rule?.category_id ?? hint));
+    const r = await quickAddCore(supabase, requiredText(fd, "text", "Entry"), "manual", text(fd, "category_id"));
     refreshAll();
-    return {
-      ok: true,
-      message: `Added ${rupees(parsed.amount)} ${parsed.direction === "debit" ? "spent" : "received"}${cat ? ` · ${cat.emoji ?? ""} ${cat.name}` : " · needs a category"}${parsed.person ? ` · ${parsed.person}` : ""}${parsed.isCash ? " · cash" : ""}${res.matchedTo ? " · linked to the bank entry" : ""}.`,
-    };
+    return { ok: true, message: r.message };
   } catch (e) {
     return toActionError(e);
   }

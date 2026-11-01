@@ -18,7 +18,16 @@ Your private workspace for creator deals and (soon) personal finances.
 - Quick entries ("450 cab", "lent 2000 to rahul") are linked to the matching bank line, so nothing is counted twice
 - Monthly summary by category, payee and lending, plus a full change history on every transaction
 
-**Coming next:** Phase 4 adds the Telegram bot and reminders.
+**Phase 4 (done):**
+- Telegram bot: type "450 cab" to log it, or forward a statement PDF and it gets read
+- `/review` to sort transactions one tap at a time, plus `/summary`, `/today` and `/owe`
+- A 9 AM message on days something needs you:
+  - last month's statement until it's uploaded
+  - transactions to review
+  - follow-ups and content due
+  - overdue invoices
+  - advance-tax dates
+  - a monthly recap
 
 ---
 
@@ -33,6 +42,7 @@ Your private workspace for creator deals and (soon) personal finances.
    Do the same for **every file** in `supabase/migrations/`, in name order:
    - Phase 2: `20261101100000_phase2_money.sql`
    - Phase 3: `20261102000000_phase3_finance.sql`
+   - Phase 4: `20261103000000_phase4_telegram.sql`
 
    The app's **Setup check** page (`/setup`) shows which ones are still missing.
 
@@ -78,7 +88,20 @@ Without this, the email screen still works: it opens Gmail with everything fille
 
 The app uses `gemini-3.8-flash` and falls back to `gemini-3.5-flash-lite` (which has a bigger free daily limit). To pin a model, set `GEMINI_MODEL`.
 
-### 6. Put it on your iPhone
+### 6. Telegram bot & 9 AM reminders
+1. In Telegram, message **@BotFather**, send `/newbot`, pick a name and a username ending in `bot`, and copy the token.
+2. In Vercel, add these environment variables, then **Redeploy**:
+   | Name | Value |
+   |---|---|
+   | `TELEGRAM_BOT_TOKEN` | the token from BotFather |
+   | `SUPABASE_SECRET_KEY` | Supabase, then **Project Settings**, then **API Keys**, then **Secret keys** (`sb_secret_…`). Lets the bot save entries without a browser login. |
+   | `CRON_SECRET` | any long random text. It protects the 9 AM job. |
+3. Open the app on its **production address**. In **Settings**, then **Telegram bot & reminders**, press **Connect bot**, then **Open Telegram & connect**, then tap **Start** in Telegram.
+4. If Telegram reports a 401 or 403 error, turn off Vercel **Deployment Protection** for production. The app's own login still protects every page.
+
+The morning job runs from `vercel.json` at 03:30 UTC, which is 9:00 AM in India.
+
+### 7. Put it on your iPhone
 Open the link in **Safari**, tap **Share**, then **Add to Home Screen**. It opens like a normal app.
 
 ---

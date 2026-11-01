@@ -22,12 +22,13 @@ const SELECT =
   "id, source, txn_date, description, amount, direction, counterparty, note, person, is_cash, needs_review, matched_txn_id, account_id, category:categories(id, name, kind, emoji, is_business)";
 
 /** All transactions in a date range (pages through results — Supabase returns 1,000 rows at a time). */
-export async function loadTxns(supabase: DB, from: string, to: string): Promise<Txn[]> {
+export async function loadTxns(supabase: DB, from: string, to: string, userId?: string): Promise<Txn[]> {
   const out: Txn[] = [];
   for (let start = 0; ; start += 1000) {
-    const { data, error } = await supabase
-      .from("transactions")
-      .select(SELECT)
+    let q = supabase.from("transactions").select(SELECT);
+    // Logged-in pages are already limited to your rows; the bot's client passes your id.
+    if (userId) q = q.eq("user_id", userId);
+    const { data, error } = await q
       .gte("txn_date", from)
       .lte("txn_date", to)
       .order("txn_date")

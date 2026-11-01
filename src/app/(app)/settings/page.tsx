@@ -8,6 +8,9 @@ import { emailConfig } from "@/lib/email";
 import { todayIST } from "@/lib/format";
 import { fyOf } from "@/lib/fy";
 import { TDS_SECTIONS, formatInvoiceNumber } from "@/lib/money";
+import { isAdminConfigured } from "@/lib/supabase/admin";
+import { isTelegramConfigured, webhookInfo } from "@/lib/telegram/api";
+import { TelegramControls } from "./telegram-card";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -15,6 +18,14 @@ export default async function SettingsPage() {
   const { supabase, email } = await requireUser();
   const { data: p } = await supabase.from("profile").select("*").maybeSingle();
   const mail = emailConfig();
+  const tgReady = isTelegramConfigured();
+  const hook = tgReady ? await webhookInfo().catch(() => null) : null;
+  const webhookOk = Boolean(hook?.url && hook.url.endsWith("/api/telegram/webhook"));
+  const missingEnv = [
+    !tgReady && "TELEGRAM_BOT_TOKEN",
+    !isAdminConfigured() && "SUPABASE_SECRET_KEY",
+    !process.env.CRON_SECRET && "CRON_SECRET",
+  ].filter(Boolean) as string[];
   const fy = fyOf(todayIST());
 
   return (
@@ -73,6 +84,37 @@ export default async function SettingsPage() {
 
         <SubmitButton>Save settings</SubmitButton>
       </ActionForm>
+
+      <Card
+        title="Telegram bot & reminders"
+        action={p?.telegram_chat_id ? <Badge tone="green">Connected</Badge> : <Badge tone="amber">Not connected</Badge>}
+      >
+        {missingEnv.length > 0 ? (
+          <div className="space-y-2 text-sm text-slate-700">
+            <p>A few settings are needed in Vercel first (Settings → Environment Variables), then <b>Redeploy</b>:</p>
+            <ul className="list-disc space-y-1 pl-5">
+              {missingEnv.includes("TELEGRAM_BOT_TOKEN") && (
+                <li><code className="rounded bg-slate-100 px-1">TELEGRAM_BOT_TOKEN</code> — in Telegram, message <b>@BotFather</b>, send <code>/newbot</code>, pick a name, and copy the token it gives you.</li>
+              )}
+              {missingEnv.includes("SUPABASE_SECRET_KEY") && (
+                <li><code className="rounded bg-slate-100 px-1">SUPABASE_SECRET_KEY</code> — Supabase → Project Settings → API Keys → <b>Secret keys</b> (starts with <code>sb_secret_</code>). Lets the bot save entries without a browser login. Keep it secret.</li>
+              )}
+              {missingEnv.includes("CRON_SECRET") && (
+                <li><code className="rounded bg-slate-100 px-1">CRON_SECRET</code> — any long random text (e.g. mash the keyboard for 30+ characters). Protects the 9 AM reminder job.</li>
+              )}
+            </ul>
+          </div>
+        ) : (
+          <>
+            {hook?.last_error_message && (
+              <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                Telegram couldn&apos;t reach the app last time: “{hook.last_error_message}”. If it says 401 or 403, turn off Vercel&apos;s <b>Deployment Protection</b> for production (Vercel → Settings → Deployment Protection) or open the app on its production domain and press “Re-connect bot”.
+              </p>
+            )}
+            <TelegramControls connected={Boolean(p?.telegram_chat_id)} webhookOk={webhookOk} reminders={(p?.reminders ?? {}) as { digest?: boolean; statements?: boolean }} />
+          </>
+        )}
+      </Card>
 
       <Card title="Email sending" action={mail ? <Badge tone="green">Connected</Badge> : <Badge tone="amber">Not set up</Badge>}>
         {mail ? (

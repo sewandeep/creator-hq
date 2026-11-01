@@ -56,6 +56,22 @@ export default async function SetupPage() {
     );
   }
 
+  const { error: phase4Error } = await supabase.from("profile").select("telegram_chat_id").limit(0);
+  if (phase4Error)
+    migrationChecks.push({
+      ok: false,
+      title: "Phase 4 — Telegram & reminders: database update not applied",
+      detail: (
+        <>
+          Run{" "}
+          <a className="link" href="https://github.com/sewandeep/creator-hq/blob/main/supabase/migrations/20261103000000_phase4_telegram.sql" target="_blank" rel="noreferrer">
+            20261103000000_phase4_telegram.sql
+          </a>{" "}
+          in the Supabase SQL Editor, then reload this page.
+        </>
+      ),
+    });
+  else migrationChecks.push({ ok: true, title: "Phase 4 — Telegram & reminders" });
   const { error: bucketError } = await supabase.storage.from("deal-files").list("", { limit: 1 });
   const { error: stmtBucketError } = await supabase.storage.from("statements").list("", { limit: 1 });
   const { data: profile } = await supabase.from("profile").select("legal_name, pan, bank_account_number").maybeSingle();

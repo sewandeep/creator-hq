@@ -44,6 +44,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon.svg|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // Telegram and the daily job call these without a login; they check their own secrets.
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|manifest.webmanifest|api/telegram/|api/cron/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
