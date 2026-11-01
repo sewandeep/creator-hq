@@ -39,12 +39,12 @@ export const TOOL_DECLARATIONS = [
   { name: "brand_overview", description: "Everything about one brand: deals, deliverables, invoices, payments, contacts, recent notes, how fast they pay.", parameters: obj({ brand: S("brand name (partial is fine)") }, ["brand"]) },
   { name: "list_invoices", description: "Invoices with balances.", parameters: obj({ status: S("unpaid, overdue, paid or all"), fy: I("financial year start, e.g. 2026 for FY 2026-27") }) },
   { name: "get_earnings", description: "Creator income actually received (payments) between two dates, by brand and by month, with TDS.", parameters: obj({ from: S("YYYY-MM-DD"), to: S("YYYY-MM-DD") }, ["from", "to"]) },
-  { name: "get_lending", description: "Who owes the user money (and whom the user owes).", parameters: obj({}) },
+  { name: "get_lending", description: "Who owes the user money (and whom the user owes)." },
   { name: "get_tds", description: "TDS cut by each brand in a financial year vs what 26AS shows.", parameters: obj({ fy: I("financial year start") }) },
   { name: "get_upcoming", description: "Follow-ups due, content deadlines, deal deadlines and unpaid invoices in the next N days (plus anything overdue).", parameters: obj({ days: I() }) },
-  { name: "get_rate_stats", description: "What brands paid per piece of content (reel, story, video…), from finished deals, plus the user's own rate card.", parameters: obj({}) },
-  { name: "list_categories", description: "The user's money categories (names to use when categorising).", parameters: obj({}) },
-  { name: "list_bank_accounts", description: "The user's bank accounts and the latest statement uploaded for each.", parameters: obj({}) },
+  { name: "get_rate_stats", description: "What brands paid per piece of content (reel, story, video…), from finished deals, plus the user's own rate card." },
+  { name: "list_categories", description: "The user's money categories (names to use when categorising)." },
+  { name: "list_bank_accounts", description: "The user's bank accounts and the latest statement uploaded for each." },
 
   // ---- Propose: changes the user must confirm ----
   {

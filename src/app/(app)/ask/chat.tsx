@@ -56,8 +56,17 @@ export function Chat({ initial, initialQuery }: { initial: ChatMessage[]; initia
     fd.set("text", body);
     for (const f of attach) fd.append("files", await shrinkImage(f));
     const r = await fetch("/api/ai/ask", { method: "POST", body: fd })
-      .then((x) => x.json())
-      .catch(() => ({ error: "Couldn't reach the app — check your connection and try again." }));
+      .then(async (x) => {
+        const raw = await x.text();
+        try {
+          return JSON.parse(raw);
+        } catch {
+          // Not JSON = the server crashed or timed out. Show what it said.
+          const hint = x.status === 504 ? "The AI took too long to answer (timed out). Try again, or ask something shorter." : `Server error ${x.status}.`;
+          return { error: `${hint} ${raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200)}` };
+        }
+      })
+      .catch((e) => ({ error: `Couldn't reach the app (${e instanceof Error ? e.message : "network error"}). Check your connection and try again.` }));
     setMessages((m) => [...m, { id: `a${Date.now()}`, role: "assistant", content: r.error ? `⚠️ ${r.error}` : r.reply, attachments: [], proposals: r.proposals ?? [] }]);
     setSending(false);
   }

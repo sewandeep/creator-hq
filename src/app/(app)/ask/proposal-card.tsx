@@ -63,7 +63,14 @@ export function ProposalCard({ p: initial }: { p: Proposal }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action, edits: editPayload, password: password || undefined }),
     })
-      .then((x) => x.json())
+      .then(async (x) => {
+        const raw = await x.text();
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return { ok: false, message: x.status === 504 ? "That took too long (timed out) — try again." : `Server error ${x.status}: ${raw.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160)}` };
+        }
+      })
       .catch(() => ({ ok: false, message: "Couldn't reach the app — try again." }));
     setBusy(false);
     if (action === "cancel") return setP({ ...p, status: "cancelled" });

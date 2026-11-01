@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { isEmailConfigured } from "@/lib/email";
+import { AiTest } from "./ai-test";
 
 export const metadata: Metadata = { title: "Setup check" };
 
@@ -103,7 +104,7 @@ export default async function SetupPage() {
       ? { ok: false, title: "Statement storage", detail: `Storage for bank statements isn't ready: ${stmtBucketError.message}. Run the Phase 3 file in the SQL Editor.` }
       : { ok: true, title: "Statement storage" },
     process.env.GEMINI_API_KEY
-      ? { ok: true, title: "AI statement reader (Gemini key)" }
+      ? { ok: true, title: "AI (Gemini key)", detail: <AiTest /> }
       : { ok: false, warn: true, title: "AI statement reader (Gemini key)", detail: <>Not added yet — get a free key at <b>aistudio.google.com/apikey</b> and add it in Vercel as <code className="rounded bg-slate-100 px-1">GEMINI_API_KEY</code>, then redeploy.</> },
     profile?.legal_name && profile.pan
       ? { ok: true, title: "Your invoice details (name & PAN)" }

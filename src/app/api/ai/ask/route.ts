@@ -9,9 +9,20 @@ import { AiError } from "@/lib/finance/gemini";
 import { todayIST } from "@/lib/format";
 import { FormError } from "@/lib/forms";
 
-export const maxDuration = 120;
+// The AI may look things up several times before answering.
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
+  try {
+    return await handle(req);
+  } catch (e) {
+    // Always answer with a readable message, never a bare error page.
+    console.error("ask failed", e);
+    return NextResponse.json({ error: `Something went wrong on the server: ${e instanceof Error ? e.message : String(e)}` });
+  }
+}
+
+async function handle(req: Request) {
   const { supabase, userId } = await requireUser();
   const form = await req.formData();
   const text = String(form.get("text") ?? "").slice(0, 4000);

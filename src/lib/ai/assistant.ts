@@ -4,7 +4,7 @@ import { callGemini, type GeminiContent, type GeminiPart } from "@/lib/finance/g
 import { fmtDate, todayIST } from "@/lib/format";
 import { fyLabel, fyOf } from "@/lib/fy";
 import type { Json } from "@/lib/supabase/database.types";
-import { prepareFiles, type InFile } from "./files";
+import type { InFile } from "./files";
 import { TOOL_DECLARATIONS, runTool, type ToolContext } from "./tools";
 
 export type AssistantReply = {
@@ -38,7 +38,10 @@ How to work:
 /** One assistant turn: the user's message (+ files) → reply, with any prepared actions. */
 export async function runAssistant(db: DB, userId: string, input: { text: string; files?: InFile[]; channel: "app" | "telegram" | "rundown" }): Promise<AssistantReply> {
   const { data: profile } = await db.from("profile").select("display_name, legal_name").eq("user_id", userId).maybeSingle();
-  const prepared = input.files?.length ? await prepareFiles(db, userId, input.files) : { refs: [], parts: [] };
+  // File reading (PDF, Excel) is only loaded when a file is actually sent.
+  const prepared = input.files?.length
+    ? await (await import("./files")).prepareFiles(db, userId, input.files)
+    : { refs: [] as import("./files").FileRef[], parts: [] as GeminiPart[] };
 
   // Recent conversation for context.
   const { data: history } = await db
