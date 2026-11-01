@@ -1,148 +1,158 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Empty, PageHeader, StageBadge } from "@/components/ui";
+import { Suspense } from "react";
+import { invoiceAndSend, followedUp } from "@/app/actions/quick";
+import { markInvoicePaid } from "@/app/actions/work";
+import { moveDealToStage } from "@/app/actions/deals";
 import { requireUser } from "@/lib/auth";
-import { STAGES, STAGE_IDS } from "@/lib/constants";
-import { fmtDate, rupees, todayIST } from "@/lib/format";
-import { Board } from "./board";
+import { relativeDay, rupees, todayIST } from "@/lib/format";
+import { isOverdue } from "@/lib/money";
+import { DealPanel } from "./deal-panel";
+import { NewDeal } from "./work-parts";
 
-export const metadata: Metadata = { title: "Deals" };
+export const metadata: Metadata = { title: "Work" };
 
-type Search = { view?: string; q?: string; stage?: string; lost?: string };
+type Search = { deal?: string; show?: string; q?: string };
 
-export default async function DealsPage({ searchParams }: { searchParams: Promise<Search> }) {
-  const { view = "board", q = "", stage = "", lost } = await searchParams;
+const GROUPS = [
+  { id: "talking", label: "Talking", hint: "Leads & negotiations", stages: ["lead", "contacted", "negotiating"] },
+  { id: "doing", label: "Doing", hint: "Confirmed — make the content", stages: ["confirmed", "in_progress"] },
+  { id: "money", label: "Waiting for money", hint: "Posted & invoiced", stages: ["posted", "invoiced"] },
+] as const;
+
+export default async function WorkPage({ searchParams }: { searchParams: Promise<Search> }) {
+  const sp = await searchParams;
+  const show = ["active", "done", "lost", "all"].includes(sp.show ?? "") ? sp.show! : "active";
   const { supabase } = await requireUser();
   const today = todayIST();
 
-  let query = supabase
+  let q = supabase
     .from("deals")
-    .select("id, title, stage, amount, is_barter, deal_date, due_date, next_follow_up, brand:brands!inner(id, name)")
+    .select("id, title, stage, amount, is_barter, due_date, next_follow_up, deal_date, brand:brands!inner(name), invoices(id, status, subtotal, due_date, payments(gross_amount)), deliverables(status)")
     .order("deal_date", { ascending: false });
-  if (stage && (STAGE_IDS as string[]).includes(stage)) query = query.eq("stage", stage as never);
-  const { data, error } = await query;
-  if (error) throw error;
+  if (show === "active") q = q.not("stage", "in", "(paid,lost)");
+  if (show === "done") q = q.eq("stage", "paid").limit(100);
+  if (show === "lost") q = q.eq("stage", "lost").limit(100);
+  const [{ data }, { data: brandRows }] = await Promise.all([q, supabase.from("brands").select("name").order("name")]);
+  const needle = sp.q?.trim().toLowerCase() ?? "";
+  const deals = (data ?? []).filter((d) => !needle || d.title.toLowerCase().includes(needle) || d.brand.name.toLowerCase().includes(needle));
 
-  const needle = q.trim().toLowerCase();
-  const deals = (data ?? []).filter(
-    (d) => !needle || d.title.toLowerCase().includes(needle) || d.brand.name.toLowerCase().includes(needle),
-  );
-
-  const params = (p: Partial<Search>) => {
+  const selected = sp.deal && /^[0-9a-f-]{36}$/.test(sp.deal) ? sp.deal : null;
+  const keep = (extra: Record<string, string | undefined>) => {
     const s = new URLSearchParams();
-    const merged = { view, q, stage, lost, ...p };
-    Object.entries(merged).forEach(([k, v]) => v && s.set(k, v));
-    return `/deals?${s.toString()}`;
+    const all = { show: show === "active" ? undefined : show, q: sp.q, ...extra };
+    Object.entries(all).forEach(([k, v]) => v && s.set(k, v));
+    const str = s.toString();
+    return `/deals${str ? `?${str}` : ""}`;
+  };
+  const closeHref = keep({ deal: undefined });
+
+  const card = (d: (typeof deals)[number], compact = false) => {
+    const inv = d.invoices.find((i) => i.status !== "cancelled");
+    const balance = inv ? Number(inv.subtotal) - inv.payments.reduce((s, p) => s + Number(p.gross_amount), 0) : 0;
+    const followDue = d.next_follow_up && d.next_follow_up <= today && !["paid", "lost"].includes(d.stage);
+    const late = d.due_date && d.due_date < today && ["confirmed", "in_progress"].includes(d.stage);
+    const posted = d.deliverables.filter((x) => x.status === "posted").length;
+    const active = selected === d.id;
+
+    let action: React.ReactNode = null;
+    if (!compact) {
+      if (followDue) action = <form action={followedUp.bind(null, d.id, 3)}><button className="btn-secondary w-full px-2 py-1 text-xs">Followed up ✓</button></form>;
+      else if (["lead", "contacted", "negotiating"].includes(d.stage)) action = <form action={moveDealToStage.bind(null, d.id, "confirmed")}><button className="btn-secondary w-full px-2 py-1 text-xs">They said yes →</button></form>;
+      else if (d.stage === "posted" && !inv && d.amount) action = <form action={invoiceAndSend.bind(null, d.id)}><button className="btn-primary w-full px-2 py-1 text-xs">Create & send invoice</button></form>;
+      else if (inv && balance > 0.5 && ["posted", "invoiced"].includes(d.stage)) action = <form action={markInvoicePaid.bind(null, inv.id)}><button className="btn-primary w-full px-2 py-1 text-xs">Got paid ✓</button></form>;
+    }
+    return (
+      <div key={d.id} className={`rounded-2xl bg-white p-3.5 shadow-sm ring-1 transition ${active ? "ring-2 ring-brand-500" : "ring-slate-200 hover:ring-slate-300"}`}>
+        <Link href={keep({ deal: d.id })} scroll={false} className="block">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="truncate font-semibold">{d.brand.name}</div>
+              <div className="truncate text-sm text-slate-500">{d.title}</div>
+            </div>
+            <div className="shrink-0 text-sm font-semibold">{d.amount ? rupees(d.amount) : d.is_barter ? "Barter" : ""}</div>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+            {followDue && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-rose-700">Follow up {relativeDay(d.next_follow_up!, today).toLowerCase()}</span>}
+            {d.due_date && ["confirmed", "in_progress"].includes(d.stage) && (
+              <span className={`rounded-full px-2 py-0.5 ${late ? "bg-rose-100 text-rose-700" : "bg-amber-50 text-amber-800"}`}>Due {relativeDay(d.due_date, today).toLowerCase()}</span>
+            )}
+            {d.deliverables.length > 0 && ["confirmed", "in_progress"].includes(d.stage) && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">{posted}/{d.deliverables.length} posted</span>}
+            {inv && isOverdue(inv, today) && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-rose-700">Payment late</span>}
+            {d.stage === "invoiced" && inv && !isOverdue(inv, today) && <span className="rounded-full bg-sky-50 px-2 py-0.5 text-sky-800">Invoiced</span>}
+          </div>
+        </Link>
+        {action && <div className="mt-2.5">{action}</div>}
+      </div>
+    );
   };
 
+  const filters = [
+    { id: "active", label: "In progress" },
+    { id: "done", label: "Done" },
+    { id: "lost", label: "Didn't happen" },
+  ];
+
+  const list =
+    show === "active" ? (
+      <div className={selected ? "space-y-5" : "grid gap-5 md:grid-cols-3"}>
+        {GROUPS.map((g) => {
+          const items = deals.filter((d) => (g.stages as readonly string[]).includes(d.stage));
+          const total = items.reduce((s, d) => s + Number(d.amount ?? 0), 0);
+          return (
+            <section key={g.id} className="min-w-0">
+              <div className="mb-2 flex items-baseline justify-between px-1">
+                <h2 className="font-semibold">{g.label} <span className="text-sm font-normal text-slate-400">{items.length}</span></h2>
+                {total > 0 && <span className="text-xs text-slate-500">{rupees(total)}</span>}
+              </div>
+              <div className="space-y-2.5">
+                {items.map((d) => card(d, Boolean(selected)))}
+                {!items.length && <p className="rounded-2xl border border-dashed border-slate-200 px-3 py-5 text-center text-xs text-slate-400">{g.hint}</p>}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    ) : (
+      <div className="space-y-2.5">
+        {deals.map((d) => card(d, true))}
+        {!deals.length && <p className="py-10 text-center text-sm text-slate-500">Nothing here.</p>}
+      </div>
+    );
+
   return (
-    <>
-      <PageHeader
-        title="Deals"
-        subtitle={`${deals.length} deal${deals.length === 1 ? "" : "s"}`}
-        actions={
-          <>
-            <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5 text-sm">
-              <Link href={params({ view: "board", stage: "" })} className={`rounded-md px-3 py-1 ${view !== "list" ? "bg-slate-900 text-white" : "text-slate-600"}`}>
-                Board
-              </Link>
-              <Link href={params({ view: "list" })} className={`rounded-md px-3 py-1 ${view === "list" ? "bg-slate-900 text-white" : "text-slate-600"}`}>
-                List
-              </Link>
-            </div>
-            <Link href="/deals/new" className="btn-primary">
-              + New deal
-            </Link>
-          </>
-        }
-      />
+    <div className={selected ? "" : "mx-auto max-w-6xl"}>
+      <div className={`mb-5 flex flex-wrap items-center justify-between gap-3 ${selected ? "hidden lg:flex" : ""}`}>
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Work</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <form action="/deals" className="hidden sm:block">
+            {show !== "active" && <input type="hidden" name="show" value={show} />}
+            <input name="q" defaultValue={sp.q} placeholder="Search…" className="input w-40 py-1.5" />
+          </form>
+          <NewDeal brands={(brandRows ?? []).map((b) => b.name)} />
+        </div>
+      </div>
+      <div className={`mb-4 flex gap-1.5 ${selected ? "hidden lg:flex" : ""}`}>
+        {filters.map((f) => (
+          <Link key={f.id} href={`/deals${f.id === "active" ? "" : `?show=${f.id}`}`} className={`rounded-full px-3 py-1.5 text-sm ${show === f.id ? "bg-slate-900 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>
+            {f.label}
+          </Link>
+        ))}
+      </div>
 
-      <form className="mb-4 flex flex-wrap gap-2" action="/deals">
-        <input type="hidden" name="view" value={view} />
-        <input name="q" defaultValue={q} placeholder="Search brand or deal…" className="input max-w-xs" />
-        {view === "list" && (
-          <select name="stage" defaultValue={stage} className="input w-auto">
-            <option value="">All stages</option>
-            {STAGES.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        )}
-        {view !== "list" && (
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            <input type="checkbox" name="lost" value="1" defaultChecked={Boolean(lost)} /> Show lost
-          </label>
-        )}
-        <button className="btn-secondary">Filter</button>
-      </form>
-
-      {deals.length === 0 && !needle && !stage ? (
-        <Empty
-          action={
-            <div className="flex justify-center gap-2">
-              <Link href="/deals/new" className="btn-primary">Add your first deal</Link>
-              <Link href="/import" className="btn-secondary">Import past work</Link>
-            </div>
-          }
-        >
-          No deals yet.
-        </Empty>
-      ) : view === "list" ? (
-        <div className="card overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-100">
-            <thead>
-              <tr>
-                <th className="th">Brand</th>
-                <th className="th">Deal</th>
-                <th className="th">Stage</th>
-                <th className="th text-right">Amount</th>
-                <th className="th">Date</th>
-                <th className="th">Due</th>
-                <th className="th">Follow up</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {deals.map((d) => (
-                <tr key={d.id} className="hover:bg-slate-50">
-                  <td className="td font-medium">
-                    <Link href={`/brands/${d.brand.id}`} className="hover:underline">{d.brand.name}</Link>
-                  </td>
-                  <td className="td">
-                    <Link href={`/deals/${d.id}`} className="link">{d.title}</Link>
-                  </td>
-                  <td className="td"><StageBadge stage={d.stage} /></td>
-                  <td className="td text-right tabular-nums">{d.amount ? rupees(d.amount) : d.is_barter ? "Barter" : "—"}</td>
-                  <td className="td whitespace-nowrap text-slate-600">{fmtDate(d.deal_date)}</td>
-                  <td className="td whitespace-nowrap text-slate-600">{fmtDate(d.due_date)}</td>
-                  <td className={`td whitespace-nowrap ${d.next_follow_up && d.next_follow_up <= today ? "font-medium text-rose-600" : "text-slate-600"}`}>
-                    {fmtDate(d.next_follow_up)}
-                  </td>
-                </tr>
-              ))}
-              {deals.length === 0 && (
-                <tr><td colSpan={7} className="td py-8 text-center text-slate-500">No deals match.</td></tr>
-              )}
-            </tbody>
-          </table>
+      {selected ? (
+        <div className="grid gap-6 lg:grid-cols-[minmax(240px,320px)_minmax(0,1fr)]">
+          <div className="hidden max-h-[calc(100dvh-10rem)] overflow-y-auto pr-1 lg:block">{list}</div>
+          <div className="min-w-0 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+            <Link href={closeHref} className="mb-3 inline-block text-sm text-slate-500 lg:hidden">← All deals</Link>
+            <Suspense fallback={<div className="h-64 animate-pulse rounded-2xl bg-slate-100" />}>
+              <DealPanel id={selected} closeHref={closeHref} />
+            </Suspense>
+          </div>
         </div>
       ) : (
-        <Board
-          today={today}
-          showLost={Boolean(lost)}
-          deals={deals.map((d) => ({
-            id: d.id,
-            title: d.title,
-            stage: d.stage,
-            amount: d.amount,
-            is_barter: d.is_barter,
-            due_date: d.due_date,
-            next_follow_up: d.next_follow_up,
-            brand: d.brand.name,
-          }))}
-        />
+        list
       )}
-    </>
+    </div>
   );
 }

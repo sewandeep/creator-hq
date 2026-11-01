@@ -42,6 +42,16 @@ Your private workspace for creator deals and (soon) personal finances.
   - a voice note
 - General questions: TDS sections, GST, pricing, drafting replies to brands.
 
+**Simpler, faster app:**
+- The server runs in Mumbai, next to the database.
+- Four main places: **Today**, **Work**, **Money** and **Reports**.
+- The AI panel is on every page (Ctrl/Cmd+K, or ✨ on your phone).
+- **Today** is a short "Needs you" checklist with one-tap actions.
+- **Work** is one board. Tap a deal and everything opens beside it:
+  - edit any value in place
+  - **Mark posted**, **Create & send invoice** and **Got paid ✓**
+  - **+ New deal** by telling the AI, or with 4 fields
+
 ---
 
 ## One-time setup

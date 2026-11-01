@@ -264,7 +264,7 @@ export function Chat({
             placeholder={recording ? "Recording… tap ■ to send" : 'Ask, or type "450 cab"…'}
             className="input max-h-40 min-h-10 flex-1 resize-none"
           />
-          <button type="submit" disabled={sending || (!text.trim() && !files.length)} className="btn-primary px-3">↑</button>
+          <button type="submit" disabled={sending || (!text.trim() && !files.length)} className="btn-primary px-3" aria-label="Send">↑</button>
         </form>
         {messages.length > 0 && !panel && (
           <div className="mt-1 text-right">

@@ -82,10 +82,10 @@ function Panel({ isOpen, close, queued, clearQueued }: { isOpen: boolean; close:
   );
 }
 
-export function AskButton({ className = "", label = "✨ Ask AI" }: { className?: string; label?: string }) {
-  const { toggle } = useAssistant();
+export function AskButton({ className = "", label = "✨ Ask AI", message }: { className?: string; label?: string; message?: string }) {
+  const { open } = useAssistant();
   return (
-    <button type="button" onClick={toggle} className={className}>
+    <button type="button" onClick={() => open(message)} className={className}>
       {label}
     </button>
   );

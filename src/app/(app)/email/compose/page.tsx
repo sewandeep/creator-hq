@@ -35,6 +35,7 @@ export default async function ComposePage({ searchParams }: { searchParams: Prom
   ]);
 
   const vars: TemplateVars = {
+    first_name: "there",
     brand: brand?.name,
     deal: deal?.title,
     deal_amount: deal?.amount ? rupees(deal.amount) : undefined,
