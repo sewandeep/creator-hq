@@ -1,6 +1,7 @@
 // Menu items, shared by the server layout and the client navigation.
 export const NAV = [
   { href: "/", label: "Home", group: "", icon: "M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" },
+  { href: "/ask", label: "Ask AI", group: "", icon: "M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9zM19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9z" },
   { href: "/deals", label: "Deals", group: "Work", icon: "M4 5h4v14H4zM10 5h4v9h-4zM16 5h4v6h-4z" },
   { href: "/leads", label: "Leads", group: "Work", icon: "M12 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm-7 17a7 7 0 0 1 14 0" },
   { href: "/calendar", label: "Calendar", group: "Work", icon: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4" },

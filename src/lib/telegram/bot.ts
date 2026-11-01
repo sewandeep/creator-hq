@@ -2,7 +2,13 @@ import "server-only";
 import type { DB } from "@/app/actions/helpers";
 import { suggestPattern } from "@/lib/finance/categorize";
 import { ensureCategories, type Category } from "@/lib/finance/categories-server";
+import { runAssistant } from "@/lib/ai/assistant";
+import { applyProposal, cancelProposal } from "@/lib/ai/apply";
+import type { InFile } from "@/lib/ai/files";
+import { mdToTelegram } from "@/lib/ai/format";
+import { isQuickEntry } from "@/lib/ai/route-input";
 import { applyCategory, logChange, quickAddCore } from "@/lib/finance/entries";
+import { AiError } from "@/lib/finance/gemini";
 import { processStatement, type ProcessResult } from "@/lib/finance/process";
 import { monthLabel, monthRange, summarize, loadTxns } from "@/lib/finance/report";
 import { addDays, fmtDate, rupees, todayIST } from "@/lib/format";
@@ -19,6 +25,9 @@ type TgMessage = {
   text?: string;
   caption?: string;
   document?: { file_id: string; file_name?: string; mime_type?: string; file_size?: number };
+  voice?: { file_id: string; mime_type?: string; file_size?: number };
+  audio?: { file_id: string; file_name?: string; mime_type?: string; file_size?: number };
+  photo?: { file_id: string; file_size?: number; width: number }[];
 };
 export type TgUpdate = {
   update_id: number;
@@ -37,6 +46,8 @@ const QUICK_OUT = ["Food & dining", "Groceries", "Travel & cabs", "Shopping", "F
 const QUICK_IN = ["Creator income", "Salary & other income", "Money returned", "Refunds & cashback", "Self transfer", "Interest"];
 
 const HELP = `<b>Here's what I can do</b>
+
+✨ <b>Ask me anything</b> — "how much did I spend on food in October?", "who owes me money?", "add a deal with Noise, 1 reel, 25k, due 20 Nov", "give me a rundown of this week". Send voice notes, photos of bills, brand emails, briefs, Excel sheets or your 26AS too. I always ask before saving anything.
 
 💬 <b>Log money</b> — just type it:
 • <code>450 cab</code>
@@ -106,21 +117,44 @@ async function saveState(o: Owner, patch: Partial<BotState>) {
 
 // ---------------------------------------------------------------------------
 async function onMessage(o: Owner, m: TgMessage): Promise<(() => Promise<void>) | void> {
-  // A statement PDF.
-  if (m.document) {
-    const isPdf = m.document.mime_type === "application/pdf" || /\.pdf$/i.test(m.document.file_name ?? "");
-    if (!isPdf) return void (await send(o.chatId, "Please send the bank statement as a <b>PDF</b>."));
-    if ((m.document.file_size ?? 0) > 15 * 1024 * 1024) return void (await send(o.chatId, "That PDF is over 15 MB — download a shorter period (one month) and send that."));
-    const { data: accounts } = await o.db.from("bank_accounts").select("id, name").eq("user_id", o.userId).eq("is_archived", false).order("created_at");
-    if (!accounts?.length) return void (await send(o.chatId, `First add your bank account in the app: ${appUrl()}/money/statements`));
-    const file = { fileId: m.document.file_id, fileName: m.document.file_name ?? "statement.pdf" };
-    if (accounts.length === 1) return startStatement(o, file, accounts[0].id, accounts[0].name);
-    await saveState(o, { pendingFile: file });
-    return void (await send(o.chatId, "Which account is this statement for?", accounts.map((a, i) => [{ text: a.name, callback_data: `acct:${i}` }])));
+  // Files: voice notes, photos, PDFs, sheets → the assistant.
+  const incoming = m.voice
+    ? { fileId: m.voice.file_id, name: "voice-note.ogg", mime: m.voice.mime_type ?? "audio/ogg", size: m.voice.file_size }
+    : m.audio
+      ? { fileId: m.audio.file_id, name: m.audio.file_name ?? "audio", mime: m.audio.mime_type ?? "audio/mpeg", size: m.audio.file_size }
+      : m.photo?.length
+        ? { fileId: m.photo[m.photo.length - 1].file_id, name: "photo.jpg", mime: "image/jpeg", size: m.photo[m.photo.length - 1].file_size }
+        : m.document
+          ? { fileId: m.document.file_id, name: m.document.file_name ?? "file", mime: m.document.mime_type ?? "application/octet-stream", size: m.document.file_size }
+          : null;
+  if (incoming) {
+    if ((incoming.size ?? 0) > 15 * 1024 * 1024) return void (await send(o.chatId, "That file is over 15 MB — send a smaller one (e.g. one month of statement)."));
+    const caption = (m.caption ?? "").trim();
+    const isPdf = incoming.mime === "application/pdf" || /\.pdf$/i.test(incoming.name);
+    await typing(o.chatId);
+    return async () => {
+      const bytes = await downloadFile(incoming.fileId);
+      try {
+        await askAssistant(o, caption, [{ name: incoming.name, mime: incoming.mime, bytes }]);
+      } catch (e) {
+        // If the AI is unavailable, statements still go through the normal reader.
+        if (isPdf && e instanceof AiError) return pdfFallback(o, { fileId: incoming.fileId, fileName: incoming.name });
+        throw e;
+      }
+    };
   }
 
   const text = (m.text ?? m.caption ?? "").trim();
   if (!text) return;
+
+  // Waiting for a PDF password for a statement the assistant is importing.
+  if (o.state.awaiting === "password" && o.state.proposalId && !text.startsWith("/")) {
+    const proposalId = o.state.proposalId;
+    await saveState(o, { awaiting: undefined, proposalId: undefined });
+    await deleteMessage(o.chatId, m.message_id);
+    await send(o.chatId, "🔑 Trying that password…");
+    return async () => confirmProposal(o, proposalId, undefined, text);
+  }
 
   // Waiting for a PDF password.
   if (o.state.awaiting === "password" && o.state.statementId && !text.startsWith("/")) {
@@ -157,7 +191,19 @@ async function onMessage(o: Owner, m: TgMessage): Promise<(() => Promise<void>) 
       return void (await send(o.chatId, `I don't know /${esc(cmd)}. Send /help to see what I can do.`));
   }
 
-  // Anything else: a quick entry like "450 cab".
+  // Questions and instructions → the assistant. Simple notes like "450 cab" are saved straight away.
+  if (!isQuickEntry(text, todayIST())) {
+    await typing(o.chatId);
+    return async () => {
+      try {
+        await askAssistant(o, text, []);
+      } catch (e) {
+        await send(o.chatId, `⚠️ ${esc(e instanceof Error ? e.message : String(e))}`);
+      }
+    };
+  }
+
+  // A quick entry like "450 cab".
   try {
     const r = await quickAddCore(o.db, text, "telegram");
     const cats = await ensureCategories(o.db);
@@ -178,6 +224,16 @@ async function onCallback(o: Owner, callbackId: string, data: string, m: TgMessa
   const cats = await ensureCategories(o.db);
 
   switch (action) {
+    case "ap": {
+      await answer(callbackId, "Working on it…");
+      await edit(o.chatId, m.message_id, `${m.text ? esc(m.text) : "Action"}\n\n⏳ Working on it…`);
+      return async () => confirmProposal(o, id, m.message_id);
+    }
+    case "ax": {
+      await cancelProposal(o.db, o.userId, id);
+      await answer(callbackId, "Cancelled");
+      return void (await edit(o.chatId, m.message_id, `${m.text ? esc(m.text) : "Action"}\n\n✖ Cancelled`));
+    }
     case "snooze": {
       const until = addDays(todayIST(), Number(id) || 3);
       await saveState(o, { snoozeStatementsUntil: until });
@@ -378,3 +434,46 @@ async function reportStatement(o: Owner, r: ProcessResult) {
   ];
   await send(o.chatId, lines.join("\n"), r.review ? [[{ text: "Review now", callback_data: "review" }]] : undefined);
 }
+
+// ---------------------------------------------------------------------------
+// Assistant
+// ---------------------------------------------------------------------------
+async function askAssistant(o: Owner, text: string, files: InFile[]) {
+  await typing(o.chatId);
+  const r = await runAssistant(o.db, o.userId, { text, files, channel: "telegram" });
+  await send(o.chatId, mdToTelegram(r.reply) || "👍");
+  for (const p of r.proposals) {
+    const url = appUrl();
+    await send(o.chatId, `📝 <b>Ready to save — please check:</b>\n${esc(p.summary)}`, [
+      [
+        { text: "✅ Confirm", callback_data: `ap:${p.id}` },
+        { text: "✖ Cancel", callback_data: `ax:${p.id}` },
+      ],
+      ...(url ? [[{ text: "✏️ Edit in app", url: `${url}/ask` }]] : []),
+    ]);
+  }
+}
+
+async function confirmProposal(o: Owner, proposalId: string, messageId?: number, password?: string) {
+  const r = await applyProposal(o.db, o.userId, proposalId, { password });
+  if (r.needsPassword) {
+    await saveState(o, { awaiting: "password", proposalId });
+    return void (await send(o.chatId, `🔒 ${esc(r.message)}\n\nSend the PDF password as your next message — I'll delete it right away and remember it for this account.`));
+  }
+  const url = appUrl();
+  const text = r.ok ? `✅ ${esc(r.message)}` : `⚠️ ${esc(r.message)}`;
+  const keyboard = r.ok && r.link && url ? [[{ text: "Open in app", url: `${url}${r.link}` }]] : undefined;
+  if (messageId) await edit(o.chatId, messageId, text, keyboard);
+  else await send(o.chatId, text, keyboard);
+  if (r.ok && r.link === "/money/review") await send(o.chatId, "Want to sort the unclear ones now?", [[{ text: "Review now", callback_data: "review" }]]);
+}
+
+/** Without AI: ask which account, then read the statement directly. */
+async function pdfFallback(o: Owner, file: { fileId: string; fileName: string }) {
+  const { data: accounts } = await o.db.from("bank_accounts").select("id, name").eq("user_id", o.userId).eq("is_archived", false).order("created_at");
+  if (!accounts?.length) return void (await send(o.chatId, `First add your bank account in the app: ${appUrl()}/money/statements`));
+  if (accounts.length === 1) return startStatement(o, file, accounts[0].id, accounts[0].name)();
+  await saveState(o, { pendingFile: file });
+  await send(o.chatId, "Which account is this statement for?", accounts.map((a, i) => [{ text: a.name, callback_data: `acct:${i}` }]));
+}
+

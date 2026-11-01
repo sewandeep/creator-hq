@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { logout } from "@/app/actions/auth";
+import { AskFab } from "@/components/ask-fab";
 import { BottomNav, SideNav } from "@/components/nav";
 import { NAV } from "@/lib/nav-items";
 import { requireUser } from "@/lib/auth";
@@ -60,6 +61,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </header>
 
       <main className="min-w-0 flex-1 px-4 pt-5 pb-24 sm:px-6 lg:px-8 lg:py-8">{children}</main>
+      <AskFab />
       <BottomNav />
     </div>
   );

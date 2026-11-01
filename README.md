@@ -29,6 +29,19 @@ Your private workspace for creator deals and (soon) personal finances.
   - advance-tax dates
   - a monthly recap
 
+**Phase 5 (done): the AI assistant**, in the app (**Ask AI**, the ✨ button on every page, or the box on Home) and on Telegram:
+- Ask about your own data: spending, brands, invoices, TDS, who owes you, what's due. Answers use your real numbers.
+- Rundowns and summaries, including an automatic weekly rundown on Sunday mornings.
+- Tell it to do things: create a deal, update a deal, draft an invoice, add entries, re-categorize in bulk. It prepares a card, and nothing is saved until you tap **Confirm**.
+- Drop anything in and it handles it, always asking first:
+  - a brand email or brief
+  - a bank statement (including SBI with its password)
+  - your 26AS
+  - a receipt photo or UPI screenshot
+  - an Excel sheet of past work
+  - a voice note
+- General questions: TDS sections, GST, pricing, drafting replies to brands.
+
 ---
 
 ## One-time setup
@@ -43,6 +56,7 @@ Your private workspace for creator deals and (soon) personal finances.
    - Phase 2: `20261101100000_phase2_money.sql`
    - Phase 3: `20261102000000_phase3_finance.sql`
    - Phase 4: `20261103000000_phase4_telegram.sql`
+   - Phase 5: `20261104000000_phase5_assistant.sql`
 
    The app's **Setup check** page (`/setup`) shows which ones are still missing.
 

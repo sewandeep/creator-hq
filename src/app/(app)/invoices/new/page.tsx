@@ -4,6 +4,7 @@ import { createInvoice } from "@/app/actions/invoices";
 import { PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { addDays, todayIST } from "@/lib/format";
+import { itemsFromDeal } from "@/lib/invoice-draft";
 import { nextInvoiceNumber } from "@/lib/invoice-number";
 import { InvoiceForm, type ItemRow } from "../invoice-form";
 import { loadInvoiceFormOptions } from "../form-data";
@@ -21,33 +22,10 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
   let items: ItemRow[] = [];
   let brandId = brandParam ?? "";
   if (dealId) {
-    const { data: deal } = await supabase
-      .from("deals")
-      .select("id, title, brand_id, amount, platform, deliverables(type, quantity, platform)")
-      .eq("id", dealId)
-      .maybeSingle();
-    if (deal) {
-      brandId = deal.brand_id;
-      const amount = Number(deal.amount ?? 0);
-      const dels = deal.deliverables;
-      const totalQty = dels.reduce((t, d) => t + d.quantity, 0);
-      const platform = (d: { platform: string | null }) => d.platform || deal.platform;
-      if (dels.length === 1) {
-        const d = dels[0];
-        items = [{
-          description: `${platform(d) ? `${platform(d)} ` : ""}${d.type} — ${deal.title}`,
-          quantity: String(d.quantity),
-          rate: amount ? String(Math.round((amount / d.quantity) * 100) / 100) : "",
-        }];
-      } else {
-        const what = dels.map((d) => `${d.quantity > 1 ? `${d.quantity}× ` : ""}${d.type}`).join(", ");
-        items = [{
-          description: `${deal.title}${what ? ` (${what})` : ""}`,
-          quantity: "1",
-          rate: amount ? String(amount) : "",
-        }];
-      }
-      if (!totalQty && !items.length) items = [{ description: deal.title, quantity: "1", rate: amount ? String(amount) : "" }];
+    const prepared = await itemsFromDeal(supabase, dealId);
+    if (prepared) {
+      brandId = prepared.deal.brand_id;
+      items = prepared.items;
     }
   }
   const brand = brands.find((b) => b.id === brandId);

@@ -12,6 +12,7 @@ export type BotState = {
   snoozeStatementsUntil?: string;
   lastRecap?: string;
   reviewSkip?: string[];
+  proposalId?: string;
 };
 
 const ADVANCE_TAX = [
@@ -31,7 +32,7 @@ export async function buildDigest(supabase: DB, userId: string, state: BotState,
 
   const [{ data: accounts }, { data: statements }, { count: toReview }, { data: followUps }, { data: due }, { data: invoices }] = await Promise.all([
     supabase.from("bank_accounts").select("id, name").eq("user_id", userId).eq("is_archived", false),
-    supabase.from("statements").select("account_id, period_to").eq("user_id", userId).eq("status", "done").gte("period_to", addDays(lm.to, -3)),
+    supabase.from("statements").select("account_id, period_to, created_at").eq("user_id", userId).eq("status", "done").gte("period_to", lm.from),
     supabase.from("transactions").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("needs_review", true),
     supabase.from("deals").select("title, next_follow_up, brand:brands(name)").eq("user_id", userId).lte("next_follow_up", today).not("stage", "in", "(paid,lost)").order("next_follow_up"),
     supabase.from("deliverables").select("type, quantity, due_date, deal:deals(title, brand:brands(name))").eq("user_id", userId).neq("status", "posted").gte("due_date", today).lte("due_date", addDays(today, 1)),
@@ -39,7 +40,12 @@ export async function buildDigest(supabase: DB, userId: string, state: BotState,
   ]);
 
   // 1. Last month's statements — keeps reminding until uploaded.
-  const missing = (accounts ?? []).filter((a) => !(statements ?? []).some((s) => s.account_id === a.id));
+  // A month counts as uploaded if a statement reaches its last days, or was
+  // downloaded after the month ended and includes it (quiet accounts may have
+  // no transactions in the final days).
+  const covers = (s: { period_to: string | null; created_at: string }) =>
+    !!s.period_to && (s.period_to >= addDays(lm.to, -3) || s.created_at.slice(0, 10) > lm.to);
+  const missing = (accounts ?? []).filter((a) => !(statements ?? []).some((s) => s.account_id === a.id && covers(s)));
   const snoozed = state.snoozeStatementsUntil && state.snoozeStatementsUntil > today;
   if (prefs.statements !== false && missing.length && Number(today.slice(8)) >= 2 && !snoozed) {
     lines.push(`📄 <b>Upload ${monthLabel(lastMonth)} statement${missing.length > 1 ? "s" : ""}</b> for ${missing.map((a) => esc(a.name)).join(" and ")}. Just forward the PDF here.`);

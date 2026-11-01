@@ -72,6 +72,24 @@ export default async function SetupPage() {
       ),
     });
   else migrationChecks.push({ ok: true, title: "Phase 4 — Telegram & reminders" });
+  const { error: phase5Error } = await supabase.from("ai_proposals").select("id").limit(0);
+  migrationChecks.push(
+    phase5Error
+      ? {
+          ok: false,
+          title: "Phase 5 — AI assistant: database update not applied",
+          detail: (
+            <>
+              Run{" "}
+              <a className="link" href="https://github.com/sewandeep/creator-hq/blob/main/supabase/migrations/20261104000000_phase5_assistant.sql" target="_blank" rel="noreferrer">
+                20261104000000_phase5_assistant.sql
+              </a>{" "}
+              in the Supabase SQL Editor, then reload this page.
+            </>
+          ),
+        }
+      : { ok: true, title: "Phase 5 — AI assistant" },
+  );
   const { error: bucketError } = await supabase.storage.from("deal-files").list("", { limit: 1 });
   const { error: stmtBucketError } = await supabase.storage.from("statements").list("", { limit: 1 });
   const { data: profile } = await supabase.from("profile").select("legal_name, pan, bank_account_number").maybeSingle();

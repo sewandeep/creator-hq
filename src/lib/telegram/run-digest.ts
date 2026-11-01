@@ -1,6 +1,9 @@
 import "server-only";
 import { todayIST } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { RUNDOWN_PROMPT, runAssistant } from "@/lib/ai/assistant";
+import { mdToTelegram } from "@/lib/ai/format";
+import { isAiConfigured } from "@/lib/finance/gemini";
 import { send } from "./api";
 import { buildDigest, digestText, type BotState } from "./digest";
 
@@ -32,6 +35,16 @@ export async function runDailyDigest(opts: { force?: boolean; userId?: string } 
       .from("profile")
       .update({ last_digest_on: today, ...(d.recapFor ? { telegram_state: { ...state, lastRecap: d.recapFor } } : {}) })
       .eq("user_id", p.user_id);
+    // Sundays: an AI-written rundown of the week.
+    const isSunday = new Date(`${today}T00:00:00Z`).getUTCDay() === 0;
+    if (isSunday && isAiConfigured() && !opts.force) {
+      try {
+        const r = await runAssistant(db, p.user_id, { text: RUNDOWN_PROMPT, channel: "rundown" });
+        await send(Number(p.telegram_chat_id), `🗓️ <b>Your weekly rundown</b>\n\n${mdToTelegram(r.reply)}`);
+      } catch (e) {
+        console.error("weekly rundown failed", e);
+      }
+    }
     results.push({ userId: p.user_id, sent: d.lines.length > 0, items: d.lines.length });
   }
   return results;

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { AskBox } from "@/components/ask-box";
+import { RundownCard } from "@/components/rundown-card";
 import { Badge, Card, Empty, PageHeader, Stat, StageBadge } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { ACTIVE_STAGES, LEAD_STAGES, STAGES, stageInfo } from "@/lib/constants";
@@ -11,7 +13,7 @@ export default async function Dashboard() {
   const fy = fyOf(today);
   const { from, to } = fyRange(fy);
 
-  const [deals, followUps, deliverables, dealDeadlines, activity, openInvoices, fyPayments, toReview] = await Promise.all([
+  const [deals, followUps, deliverables, dealDeadlines, activity, openInvoices, fyPayments, toReview, rundown] = await Promise.all([
     supabase.from("deals").select("id, stage, amount, deal_date"),
     supabase
       .from("deals")
@@ -46,6 +48,7 @@ export default async function Dashboard() {
       .order("due_date"),
     supabase.from("payments").select("gross_amount, tds_amount").gte("received_date", from).lte("received_date", to),
     supabase.from("transactions").select("id", { count: "exact", head: true }).eq("needs_review", true),
+    supabase.from("ai_messages").select("content, created_at").eq("channel", "rundown").eq("role", "assistant").order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
   const unpaid = (openInvoices.data ?? []).map((i) => ({
     ...i,
@@ -88,6 +91,10 @@ export default async function Dashboard() {
   return (
     <>
       <PageHeader title="Home" subtitle={fmtDate(today)} />
+
+      <div className="mb-4">
+        <AskBox />
+      </div>
 
       {(toReview.count ?? 0) > 0 && (
         <Link href="/money/review" className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 hover:bg-amber-100">
@@ -192,6 +199,10 @@ export default async function Dashboard() {
             ))}
           </ul>
         </Card>
+
+        <div className="lg:col-span-2">
+          <RundownCard text={rundown.data?.content ?? null} when={rundown.data ? `Written ${fmtDateTime(rundown.data.created_at)}` : null} />
+        </div>
 
         <Card title="Recent activity">
           {activity.data?.length ? (

@@ -49,6 +49,34 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"ai_messages": {
+                  Row: {
+                    "attachments": NonNullable<Json>,"channel": string,"content": string,"created_at": string,"id": string,"proposal_ids": (string)[],"role": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attachments"?: NonNullable<Json>,"channel"?: string,"content": string,"created_at"?: string,"id"?: string,"proposal_ids"?: (string)[],"role": string,"user_id"?: string
+                  }
+                  Update: {
+                    "attachments"?: NonNullable<Json>,"channel"?: string,"content"?: string,"created_at"?: string,"id"?: string,"proposal_ids"?: (string)[],"role"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"ai_proposals": {
+                  Row: {
+                    "applied_at": string | null,"channel": string,"created_at": string,"id": string,"kind": string,"payload": NonNullable<Json>,"result": Json | null,"status": string,"summary": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "applied_at"?: string | null,"channel"?: string,"created_at"?: string,"id"?: string,"kind": string,"payload": NonNullable<Json>,"result"?: Json | null,"status"?: string,"summary": string,"user_id"?: string
+                  }
+                  Update: {
+                    "applied_at"?: string | null,"channel"?: string,"created_at"?: string,"id"?: string,"kind"?: string,"payload"?: NonNullable<Json>,"result"?: Json | null,"status"?: string,"summary"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"bank_accounts": {
                   Row: {
                     "bank": string,"created_at": string,"id": string,"is_archived": boolean,"last4": string | null,"name": string,"pdf_password": string | null,"user_id": string
