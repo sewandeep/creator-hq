@@ -128,7 +128,7 @@ export default async function SetupPage() {
                   {c.title}
                   {!c.ok && <Badge tone={c.warn ? "amber" : "red"}>{c.warn ? "Recommended" : "Needs fixing"}</Badge>}
                 </div>
-                {c.detail && <p className="mt-1 text-sm text-slate-600">{c.detail}</p>}
+                {c.detail && <div className="mt-1 text-sm text-slate-600">{c.detail}</div>}
               </div>
             </li>
           ))}

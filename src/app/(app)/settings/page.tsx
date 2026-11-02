@@ -32,6 +32,21 @@ export default async function SettingsPage() {
     <div className="max-w-3xl space-y-6">
       <PageHeader title="Settings" subtitle="These details are printed on your invoices." actions={<Link href="/setup" className="btn-secondary">Run setup check</Link>} />
 
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {[
+          { href: "/money/statements", label: "🏦 Bank accounts & statements" },
+          { href: "/money/categories", label: "🏷️ Money categories & rules" },
+          { href: "/email/templates", label: "✉️ Email templates" },
+          { href: "/insights", label: "💸 My rate card" },
+          { href: "/import", label: "📥 Import past work" },
+          { href: "/setup", label: "✅ Setup check" },
+        ].map((l) => (
+          <Link key={l.href} href={l.href} className="rounded-xl bg-white px-3 py-2.5 text-sm font-medium shadow-sm ring-1 ring-slate-200 hover:ring-brand-300">
+            {l.label}
+          </Link>
+        ))}
+      </div>
+
       <ActionForm action={saveProfile} className="space-y-6">
         <Card title="Your details">
           <div className="grid gap-4 sm:grid-cols-2">
