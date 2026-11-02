@@ -7,6 +7,9 @@ import "server-only";
 
 const BASE = process.env.GEMINI_BASE_URL?.replace(/\/+$/, "") || "https://generativelanguage.googleapis.com";
 const DEFAULT_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash-lite"];
+// Reading statement rows is simple copying work: the faster Flash-Lite model is
+// quicker and has a much bigger free daily limit; the balance check catches mistakes.
+export const EXTRACT_MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
 
 export function isAiConfigured() {
   return Boolean(process.env.GEMINI_API_KEY);
@@ -17,10 +20,11 @@ export class AiError extends Error {}
 type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
 
 /** One generateContent call with model fallback (Flash → Flash-Lite on quota / availability problems). */
-export async function callGemini(body: object): Promise<{ json: GeminiResponse; model: string }> {
+export async function callGemini(body: object, preferred: string[] = DEFAULT_MODELS): Promise<{ json: GeminiResponse; model: string }> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new AiError("The AI isn't set up yet — add GEMINI_API_KEY in Vercel (see Setup check).");
-  const models = process.env.GEMINI_MODEL ? [process.env.GEMINI_MODEL, ...DEFAULT_MODELS.filter((m) => m !== process.env.GEMINI_MODEL)] : DEFAULT_MODELS;
+  const pinned = preferred === EXTRACT_MODELS ? process.env.GEMINI_EXTRACT_MODEL : process.env.GEMINI_MODEL;
+  const models = pinned ? [pinned, ...preferred.filter((m) => m !== pinned)] : preferred;
 
   let lastError = "";
   for (const model of models) {
@@ -62,14 +66,17 @@ export type GeminiPart = {
 export type GeminiContent = { role: "user" | "model"; parts: GeminiPart[] };
 export type GeminiResponse = { candidates?: { content?: GeminiContent; finishReason?: string }[] };
 
-export async function generateJson<T>(opts: { system: string; parts: Part[]; schema: object }): Promise<{ data: T; model: string }> {
+export async function generateJson<T>(opts: { system: string; parts: Part[]; schema: object; models?: string[] }): Promise<{ data: T; model: string }> {
   let last = "";
   for (let attempt = 0; attempt < 2; attempt++) {
-    const { json, model } = await callGemini({
-      systemInstruction: { parts: [{ text: opts.system }] },
-      contents: [{ role: "user", parts: opts.parts }],
-      generationConfig: { temperature: 0, responseMimeType: "application/json", responseSchema: opts.schema },
-    });
+    const { json, model } = await callGemini(
+      {
+        systemInstruction: { parts: [{ text: opts.system }] },
+        contents: [{ role: "user", parts: opts.parts }],
+        generationConfig: { temperature: 0, responseMimeType: "application/json", responseSchema: opts.schema },
+      },
+      opts.models,
+    );
     const text = json.candidates?.[0]?.content?.parts?.filter((p) => !p.thought).map((p) => p.text ?? "").join("") ?? "";
     try {
       return { data: JSON.parse(text) as T, model };

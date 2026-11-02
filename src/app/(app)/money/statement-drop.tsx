@@ -35,8 +35,8 @@ export function StatementDrop({ accounts, userId, aiReady }: { accounts: Account
 
   async function read(id: string) {
     setBusy("Reading every row and checking the balances… (about a minute)");
-    const r: Result = await readStatement(id, password, (sec) =>
-      setBusy(`Reading every row and checking the balances… ${sec}s (usually about a minute — you can leave this page)`),
+    const r: Result = await readStatement(id, password, (sec, progress) =>
+      setBusy(`${progress ? `${progress} · ` : "Reading every row and checking the balances · "}${sec}s — you can leave this page`),
     );
     setBusy(null);
     if (r.status === "needs_password") {

@@ -79,7 +79,11 @@ export default async function StatementsPage() {
                         {s.status === "done" && ` · ${s.rows_found} rows, ${s.rows_added} new${s.rows_duplicate ? `, ${s.rows_duplicate} already had` : ""}`}
                         {s.opening_balance !== null && ` · ${rupees(s.opening_balance)} → ${rupees(s.closing_balance)}`}
                       </div>
-                      {s.error && <div className="text-xs text-rose-600">{s.error}</div>}
+                      {s.error && (s.error.startsWith("progress: ") ? (
+                        s.status === "processing" && <div className="text-xs text-slate-500">{s.error.slice(10)}</div>
+                      ) : (
+                        <div className="text-xs text-rose-600">{s.error}</div>
+                      ))}
                       {issues.map((i) => <div key={i} className="text-xs text-amber-800">⚠ {i}</div>)}
                       {["failed", "needs_password", "uploaded", "processing"].includes(s.status) && <RetryStatement id={s.id} needsPassword={s.status === "needs_password"} />}
                     </div>

@@ -15,7 +15,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { data: st } = await supabase.from("statements").select("id").eq("id", id).maybeSingle();
   if (!st) return NextResponse.json({ status: "failed", message: "Statement not found." });
 
-  await supabase.from("statements").update({ status: "processing", error: null }).eq("id", id);
+  // processed_at doubles as "started at" while reading, so a stuck read can be spotted.
+  await supabase.from("statements").update({ status: "processing", error: "progress: Starting…", processed_at: new Date().toISOString() }).eq("id", id);
   const db = isAdminConfigured() ? createAdminClient(userId) : supabase;
   after(async () => {
     try {

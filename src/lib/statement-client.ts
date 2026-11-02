@@ -11,7 +11,7 @@ export type StatementResult = {
   issues?: string[];
 };
 
-export async function readStatement(id: string, password?: string, onWaiting?: (seconds: number) => void): Promise<StatementResult> {
+export async function readStatement(id: string, password?: string, onWaiting?: (seconds: number, progress: string | null) => void): Promise<StatementResult> {
   const start = await fetch(`/api/statements/${id}/process`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -25,8 +25,8 @@ export async function readStatement(id: string, password?: string, onWaiting?: (
   // Up to ~6 minutes; a missed check (phone asleep, network blip) just tries again.
   for (let i = 0; i < 120; i++) {
     await new Promise((r) => setTimeout(r, 3000));
-    onWaiting?.((i + 1) * 3);
     const s = await fetch(`/api/statements/${id}/status`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    onWaiting?.((i + 1) * 3, s?.progress ?? null);
     if (s && s.status !== "processing") return s as StatementResult;
   }
   return { status: "failed", message: "This is taking unusually long. It may still finish — check the Money page in a few minutes." };

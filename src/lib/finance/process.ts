@@ -78,10 +78,15 @@ export async function processStatement(supabase: DB, statementId: string, passwo
   const catByName = new Map(categories.map((c) => [c.name.toLowerCase(), c]));
   const textLength = pages.join("").replace(/\s/g, "").length;
   let ex;
+  // Progress for the page that's waiting ("Reading part 2 of 4…"). Kept in the
+  // error column only while reading; it's cleared when the statement finishes.
+  const progress = async (done: number, total: number) => {
+    await supabase.from("statements").update({ error: `progress: Read part ${done} of ${total}` }).eq("id", statementId);
+  };
   try {
     ex =
       textLength > 200
-        ? await extractWithAi({ pages }, categories.map((c) => c.name))
+        ? await extractWithAi({ pages }, categories.map((c) => c.name), progress)
         : password
           ? null
           : await extractWithAi({ pdfBase64: Buffer.from(bytes).toString("base64") }, categories.map((c) => c.name));

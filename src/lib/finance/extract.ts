@@ -1,5 +1,5 @@
 import "server-only";
-import { generateJson } from "./gemini";
+import { EXTRACT_MODELS, generateJson } from "./gemini";
 import { maskAccountNumbers } from "./pdf-text";
 
 export type AiRow = {
@@ -50,7 +50,7 @@ function schema(categoryNames: string[]) {
             upi_id: nullable("STRING"),
             category: { type: "STRING", enum: [...categoryNames, "Uncategorized"] },
             confidence: { type: "NUMBER", description: "0 to 1 — how sure you are about the category" },
-            why: { type: "STRING", description: "A few words on why this category" },
+            why: { type: "STRING", description: "At most 4 words on why this category" },
           },
           required: ["date", "description", "debit", "credit", "counterparty", "category", "confidence", "why"],
         },
@@ -80,7 +80,7 @@ Rules:
 - confidence: 0.9+ only when the merchant makes it obvious.`;
 
 /** Groups page texts into chunks small enough for one AI call. */
-function chunk(pages: string[], maxChars = 18000) {
+function chunk(pages: string[], maxChars = 9000) {
   const chunks: string[] = [];
   let cur = "";
   pages.forEach((p, i) => {
@@ -98,28 +98,44 @@ function chunk(pages: string[], maxChars = 18000) {
 export type Extracted = Omit<AiResult, "transactions"> & { rows: AiRow[]; model: string };
 
 /** Sends the statement text (or, for scanned PDFs, the PDF itself) to the AI. */
-export async function extractWithAi(input: { pages: string[] } | { pdfBase64: string }, categoryNames: string[]): Promise<Extracted> {
+export async function extractWithAi(
+  input: { pages: string[] } | { pdfBase64: string },
+  categoryNames: string[],
+  onProgress?: (done: number, total: number) => Promise<void> | void,
+): Promise<Extracted> {
   const s = schema(categoryNames);
-  const results: AiResult[] = [];
+  let results: AiResult[] = [];
   let model = "";
   if ("pdfBase64" in input) {
     const r = await generateJson<AiResult>({
       system: SYSTEM,
       schema: s,
+      models: EXTRACT_MODELS,
       parts: [{ text: "Here is the bank statement PDF. Extract every transaction." }, { inlineData: { mimeType: "application/pdf", data: input.pdfBase64 } }],
     });
     results.push(r.data);
     model = r.model;
   } else {
-    for (const text of chunk(input.pages.map(maskAccountNumbers))) {
-      const r = await generateJson<AiResult>({
-        system: SYSTEM,
-        schema: s,
-        parts: [{ text: `Bank statement text (columns separated by " | "):\n\n${text}` }],
-      });
-      results.push(r.data);
-      model = r.model;
-    }
+    // Read the parts of the statement at the same time (a few at once) — much faster than one by one.
+    const parts = chunk(input.pages.map(maskAccountNumbers));
+    results = new Array(parts.length);
+    let done = 0;
+    let next = 0;
+    const worker = async () => {
+      while (next < parts.length) {
+        const i = next++;
+        const r = await generateJson<AiResult>({
+          system: SYSTEM,
+          schema: s,
+          models: EXTRACT_MODELS,
+          parts: [{ text: `Bank statement text, part ${i + 1} of ${parts.length} (columns separated by " | "):\n\n${parts[i]}` }],
+        });
+        results[i] = r.data;
+        model = r.model;
+        await onProgress?.(++done, parts.length);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, parts.length) }, worker));
   }
   const first = results[0];
   const last = results[results.length - 1];
