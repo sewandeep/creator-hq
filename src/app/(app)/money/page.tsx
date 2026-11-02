@@ -118,6 +118,29 @@ export default async function MoneyPage({ searchParams }: { searchParams: Promis
             )}
           </section>
 
+          {(s.sajilo.in > 0 || s.sajilo.out > 0) && (
+            <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+              <div className="mb-3 flex items-baseline justify-between">
+                <h2 className="font-semibold">🏢 Sajilo</h2>
+                <span className="text-xs text-slate-400">kept out of your personal totals</span>
+              </div>
+              <ul className="space-y-1.5 text-sm">
+                {s.sajilo.cats.map((c) => (
+                  <li key={c.id}>
+                    <Link href={`/money/transactions?month=${ym}&category=${c.id}`} className="flex justify-between gap-2 hover:underline">
+                      <span>{c.name} <span className="text-xs text-slate-400">· {c.count}</span></span>
+                      <span className="font-medium tabular-nums">{c.kind === "income" ? "+" : "−"}{rupees(Math.abs(c.amount))}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-3 flex justify-between border-t border-slate-100 pt-3 text-sm font-semibold">
+                <span>Net</span>
+                <span className={`tabular-nums ${s.sajilo.net < 0 ? "text-rose-600" : "text-emerald-700"}`}>{rupees(s.sajilo.net)}</span>
+              </div>
+            </section>
+          )}
+
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
             <h2 className="mb-3 font-semibold">Money in</h2>
             {s.incomeCats.length ? (

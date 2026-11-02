@@ -16,7 +16,7 @@ export type AssistantReply = {
 
 function systemPrompt(name: string) {
   const today = todayIST();
-  return `You are the assistant inside Creator HQ, a private app for ${name || "an Indian content creator"} who does paid brand collaborations (Instagram/YouTube) and also tracks personal money. Always reply in clear, simple English.
+  return `You are the assistant inside Creator HQ, a private app for ${name || "an Indian content creator"} who does paid brand collaborations (Instagram/YouTube) and also tracks personal money. They also run a separate business called Sajilo: its money uses the categories "Sajilo income" and "Sajilo expenses" and is kept out of personal income/spending totals (report it separately). Always reply in clear, simple English.
 
 Today is ${fmtDate(today)} (${today}), India time. Current financial year: ${fyLabel(fyOf(today))} (April–March).
 

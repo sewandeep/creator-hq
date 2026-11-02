@@ -369,7 +369,7 @@ async function sendSummary(o: Owner) {
   const top = s.spendingCats.slice(0, 6).map((c) => `• ${c.emoji ?? ""} ${esc(c.name)} — ${rupees(c.amount)}`).join("\n");
   await send(
     o.chatId,
-    `📊 <b>${monthLabel(ym)} so far</b>\n\nIncome: <b>${rupees(s.income)}</b>\nSpent: <b>${rupees(s.spent)}</b>\nInvested: ${rupees(s.invested)}\nLeft over: <b>${rupees(s.income - s.spent - s.invested)}</b>\n\n${top || "No spending recorded yet."}${s.unclear.length ? `\n\n🧾 ${s.unclear.length} still to review — /review` : ""}`,
+    `📊 <b>${monthLabel(ym)} so far</b>\n\nIncome: <b>${rupees(s.income)}</b>\nSpent: <b>${rupees(s.spent)}</b>\nInvested: ${rupees(s.invested)}\nLeft over: <b>${rupees(s.income - s.spent - s.invested)}</b>\n\n${top || "No spending recorded yet."}${s.sajilo.in || s.sajilo.out ? `\n\n🏢 <b>Sajilo</b> (kept separate): in ${rupees(s.sajilo.in)} · out ${rupees(s.sajilo.out)} · net <b>${rupees(s.sajilo.net)}</b>` : ""}${s.unclear.length ? `\n\n🧾 ${s.unclear.length} still to review — /review` : ""}`,
     [[{ text: "Open in app", url: `${appUrl()}/money` }]].filter(() => Boolean(appUrl())),
   );
 }

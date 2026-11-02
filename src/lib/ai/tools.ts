@@ -164,6 +164,7 @@ const TOOLS: Record<string, (a: Args, c: ToolContext) => Promise<Record<string, 
       cash_withdrawn: s.cashWithdrawn,
       cash_spends_logged: s.cashLogged,
       creator_work_expenses: s.business,
+      sajilo_business: { note: "Sajilo is the owner's separate business; it is NOT included in income/spent above", money_in: round2(s.sajilo.in), money_out: round2(s.sajilo.out), net: round2(s.sajilo.net), by_category: s.sajilo.cats.map((c) => ({ category: c.name, amount: round2(c.amount) })) },
       transactions_needing_review: s.unclear.length,
     };
   },

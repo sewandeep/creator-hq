@@ -38,6 +38,8 @@ export const DEFAULT_CATEGORIES: { name: string; kind: CategoryKind; emoji: stri
   { name: "Self transfer", kind: "transfer", emoji: "🔄" },
   { name: "Cash withdrawal", kind: "transfer", emoji: "🏧" },
   { name: "Credit card bill", kind: "transfer", emoji: "💳" },
+  { name: "Sajilo income", kind: "income", emoji: "🏢" },
+  { name: "Sajilo expenses", kind: "expense", emoji: "🏢" },
   { name: "Lent money", kind: "lending", emoji: "🤝" },
   { name: "Money returned", kind: "lending", emoji: "🙌" },
 ];
@@ -49,3 +51,9 @@ export const KIND_LABEL: Record<CategoryKind, string> = {
   savings: "Savings / investment",
   lending: "Lending",
 };
+
+/** Categories named "Sajilo …" belong to the Sajilo business: kept out of personal totals and shown on their own. */
+export const isSajilo = (name: string | null | undefined) => /^sajilo\b/i.test((name ?? "").trim());
+
+/** Categories added after launch: created once for accounts that already had their starter set. */
+export const ADDED_LATER = ["Sajilo income", "Sajilo expenses"];

@@ -1,5 +1,6 @@
 import "server-only";
 import type { DB } from "@/app/actions/helpers";
+import { isSajilo } from "./categories";
 
 export type Txn = {
   id: string;
@@ -65,11 +66,15 @@ export function summarize(txns: Txn[]) {
   const of = (kind: string) => cats.filter((c) => c.kind === kind);
   const total = (rows: { amount: number }[]) => rows.reduce((s, r) => s + r.amount, 0);
 
-  const spendingCats = of("expense").filter((c) => c.amount > 0.009).sort((a, b) => b.amount - a.amount);
-  const incomeCats = of("income").filter((c) => c.amount > 0.009).sort((a, b) => b.amount - a.amount);
+  const personal = (c: { name: string }) => !isSajilo(c.name);
+  const spendingCats = of("expense").filter((c) => personal(c) && c.amount > 0.009).sort((a, b) => b.amount - a.amount);
+  const incomeCats = of("income").filter((c) => personal(c) && c.amount > 0.009).sort((a, b) => b.amount - a.amount);
+  const sajiloCats = cats.filter((c) => isSajilo(c.name) && Math.abs(c.amount) > 0.009).sort((a, b) => b.amount - a.amount);
+  const sajiloIn = total(sajiloCats.filter((c) => c.kind === "income"));
+  const sajiloOut = total(sajiloCats.filter((c) => c.kind !== "income"));
 
   const payees = new Map<string, { name: string; amount: number; count: number }>();
-  for (const t of live.filter((x) => x.direction === "debit" && (x.category?.kind ?? "expense") === "expense")) {
+  for (const t of live.filter((x) => x.direction === "debit" && (x.category?.kind ?? "expense") === "expense" && !isSajilo(x.category?.name))) {
     const name = (t.counterparty || t.note || t.description).trim();
     const key = name.toLowerCase();
     const p = payees.get(key) ?? { name, amount: 0, count: 0 };
@@ -95,6 +100,7 @@ export function summarize(txns: Txn[]) {
     business: total(spendingCats.filter((c) => c.is_business)),
     spendingCats,
     incomeCats,
+    sajilo: { in: sajiloIn, out: sajiloOut, net: sajiloIn - sajiloOut, cats: sajiloCats },
     topPayees: [...payees.values()].sort((a, b) => b.amount - a.amount).slice(0, 8),
     unclear: live.filter((t) => !t.category || t.needs_review),
     count: live.length,
