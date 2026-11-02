@@ -63,7 +63,7 @@ export default async function Today() {
       title: `Upload ${monthLabel(lastMonth)} statement${missing.length > 1 ? "s" : ""}`,
       sub: `${missing.map((a) => a.name).join(" and ")} — or just forward the PDF to the Telegram bot`,
       tone: "amber",
-      actions: <Link href="/money/upload" className="btn-primary px-3 py-1.5 text-xs">Upload</Link>,
+      actions: <Link href="/money" className="btn-primary px-3 py-1.5 text-xs">Upload</Link>,
     });
   }
   if (review.count) {
