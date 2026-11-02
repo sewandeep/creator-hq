@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { saveAccount } from "@/app/actions/finance";
 import { ActionForm, SubmitButton } from "@/components/forms";
+import { readStatement } from "@/lib/statement-client";
 
 type Account = { id: string; name: string; bank: string; last4: string | null; hasPassword: boolean };
 
@@ -69,9 +70,7 @@ export function RetryStatement({ id, needsPassword }: { id: string; needsPasswor
         onClick={async () => {
           setBusy(true);
           setMsg(null);
-          const r = await fetch(`/api/statements/${id}/process`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: password || undefined }) })
-            .then((x) => x.json())
-            .catch(() => ({ message: "Server error — try again." }));
+          const r = await readStatement(id, password);
           setBusy(false);
           setMsg(r.message);
           if (r.status === "done") window.location.reload();

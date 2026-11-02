@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { createStatement } from "@/app/actions/finance";
+import { readStatement } from "@/lib/statement-client";
 import { createClient } from "@/lib/supabase/client";
 
 type Account = { id: string; name: string; bank: string; hasPassword: boolean };
@@ -34,13 +35,9 @@ export function StatementDrop({ accounts, userId, aiReady }: { accounts: Account
 
   async function read(id: string) {
     setBusy("Reading every row and checking the balances… (about a minute)");
-    const r: Result = await fetch(`/api/statements/${id}/process`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: password || undefined }),
-    })
-      .then((x) => x.json())
-      .catch(() => ({ status: "failed", message: "Couldn't reach the app — try again." }));
+    const r: Result = await readStatement(id, password, (sec) =>
+      setBusy(`Reading every row and checking the balances… ${sec}s (usually about a minute — you can leave this page)`),
+    );
     setBusy(null);
     if (r.status === "needs_password") {
       setNeedPassword(true);

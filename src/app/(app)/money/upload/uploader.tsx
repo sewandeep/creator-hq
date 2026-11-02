@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { createStatement } from "@/app/actions/finance";
+import { readStatement } from "@/lib/statement-client";
 import { createClient } from "@/lib/supabase/client";
 
 type Account = { id: string; name: string; bank: string; hasPassword: boolean };
@@ -22,12 +23,7 @@ export function Uploader({ accounts, userId, aiReady }: { accounts: Account[]; u
 
   async function process(id: string) {
     setStep("reading");
-    const res = await fetch(`/api/statements/${id}/process`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: password || undefined }),
-    });
-    const r = (await res.json().catch(() => ({ status: "failed", message: `Server error (${res.status}). Try again in a minute.` }))) as Result;
+    const r = (await readStatement(id, password)) as Result;
     if (r.status === "needs_password") {
       setAskPassword(true);
       setError(r.message);

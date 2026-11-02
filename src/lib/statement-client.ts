@@ -1,0 +1,33 @@
+// Starts reading a statement and waits for the result by checking every few
+// seconds (instead of holding one long connection, which phones drop).
+
+export type StatementResult = {
+  status: string;
+  message: string;
+  added?: number;
+  duplicates?: number;
+  review?: number;
+  balanceOk?: boolean;
+  issues?: string[];
+};
+
+export async function readStatement(id: string, password?: string, onWaiting?: (seconds: number) => void): Promise<StatementResult> {
+  const start = await fetch(`/api/statements/${id}/process`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password: password || undefined }),
+  })
+    .then((r) => r.json())
+    .catch(() => null);
+  if (!start) return { status: "failed", message: "Couldn't reach the app — check your connection and try again." };
+  if (start.status !== "processing") return start as StatementResult;
+
+  // Up to ~6 minutes; a missed check (phone asleep, network blip) just tries again.
+  for (let i = 0; i < 120; i++) {
+    await new Promise((r) => setTimeout(r, 3000));
+    onWaiting?.((i + 1) * 3);
+    const s = await fetch(`/api/statements/${id}/status`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (s && s.status !== "processing") return s as StatementResult;
+  }
+  return { status: "failed", message: "This is taking unusually long. It may still finish — check the Money page in a few minutes." };
+}
