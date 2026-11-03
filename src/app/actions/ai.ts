@@ -2,24 +2,33 @@
 
 import { after } from "next/server";
 import { requireUser } from "@/lib/auth";
-import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
 import { RUNDOWN_PROMPT, runAssistant } from "@/lib/ai/assistant";
 import { AiError } from "@/lib/finance/gemini";
+import { createJob, runJob } from "@/lib/jobs";
 import { refreshAll } from "./helpers";
 
 /** Starts writing a rundown in the background (the Home card refreshes until it appears). */
-export async function generateRundown(): Promise<{ ok?: boolean; error?: string; since?: string }> {
+export async function generateRundown(): Promise<{ ok?: boolean; error?: string; since?: string; jobId?: string }> {
   const { supabase, userId } = await requireUser();
   const since = new Date().toISOString();
-  const db = isAdminConfigured() ? createAdminClient(userId) : supabase;
-  after(async () => {
-    try {
-      await runAssistant(db, userId, { text: RUNDOWN_PROMPT, channel: "rundown" });
-    } catch (e) {
-      await db.from("ai_messages").insert({ channel: "rundown", role: "assistant", content: `⚠️ Couldn't write the rundown: ${e instanceof AiError ? e.message : String(e)}` });
-    }
-  });
-  return { ok: true, since };
+  const jobId = await createJob(supabase, { kind: "rundown", title: "Weekly rundown" });
+  after(() =>
+    runJob(
+      supabase,
+      userId,
+      jobId,
+      async (job) => {
+        const r = await runAssistant(job.db, userId, { text: RUNDOWN_PROMPT, channel: "rundown", job });
+        return { summary: r.reply.slice(0, 200) };
+      },
+      {
+        onFail: async (message, cancelled, db) => {
+          if (!cancelled) await db.from("ai_messages").insert({ channel: "rundown", role: "assistant", content: `⚠️ Couldn't write the rundown: ${message}` });
+        },
+      },
+    ),
+  );
+  return { ok: true, since, jobId };
 }
 
 export async function clearChat() {

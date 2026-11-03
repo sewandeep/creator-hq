@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Tap } from "@/components/tap";
 import Link from "next/link";
 import { Suspense } from "react";
 import { invoiceAndSend, followedUp } from "@/app/actions/quick";
@@ -57,10 +58,10 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
 
     let action: React.ReactNode = null;
     if (!compact) {
-      if (followDue) action = <form action={followedUp.bind(null, d.id, 3)}><button className="btn-secondary w-full px-2 py-1 text-xs">Followed up ✓</button></form>;
-      else if (["lead", "contacted", "negotiating"].includes(d.stage)) action = <form action={moveDealToStage.bind(null, d.id, "confirmed")}><button className="btn-secondary w-full px-2 py-1 text-xs">They said yes →</button></form>;
-      else if (d.stage === "posted" && !inv && d.amount) action = <form action={invoiceAndSend.bind(null, d.id)}><button className="btn-primary w-full px-2 py-1 text-xs">Create & send invoice</button></form>;
-      else if (inv && balance > 0.5 && ["posted", "invoiced"].includes(d.stage)) action = <form action={markInvoicePaid.bind(null, inv.id)}><button className="btn-primary w-full px-2 py-1 text-xs">Got paid ✓</button></form>;
+      if (followDue) action = <Tap action={followedUp.bind(null, d.id, 3)} className="btn-secondary w-full px-2 py-1 text-xs" hideRow saved="Follow-up logged">Followed up ✓</Tap>;
+      else if (["lead", "contacted", "negotiating"].includes(d.stage)) action = <Tap action={moveDealToStage.bind(null, d.id, "confirmed")} className="btn-secondary w-full px-2 py-1 text-xs" done="✓" saved="Moved">They said yes →</Tap>;
+      else if (d.stage === "posted" && !inv && d.amount) action = <Tap action={invoiceAndSend.bind(null, d.id)} className="btn-primary w-full px-2 py-1 text-xs" done="Opening…" saved="">Create & send invoice</Tap>;
+      else if (inv && balance > 0.5 && ["posted", "invoiced"].includes(d.stage)) action = <Tap action={markInvoicePaid.bind(null, inv.id)} className="btn-primary w-full px-2 py-1 text-xs" done="Paid ✓" saved="Marked as paid">Got paid ✓</Tap>;
     }
     return (
       <div key={d.id} className={`rounded-2xl bg-white p-3.5 shadow-sm ring-1 transition ${active ? "ring-2 ring-brand-500" : "ring-slate-200 hover:ring-slate-300"}`}>

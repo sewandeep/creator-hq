@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { logout } from "@/app/actions/auth";
 import { AssistantProvider } from "@/components/assistant";
 import { BottomNav, Shortcuts, SideNav } from "@/components/nav";
+import { ToastHost } from "@/components/toast";
 import { requireUser } from "@/lib/auth";
 import { MORE_NAV } from "@/lib/nav-items";
 
@@ -56,6 +57,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
           <main className="min-w-0 flex-1 px-4 pt-5 pb-28 sm:px-6 lg:px-10 lg:py-8">{children}</main>
           <BottomNav />
+          <ToastHost />
         </div>
       </AssistantProvider>
     </Suspense>

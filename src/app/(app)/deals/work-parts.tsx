@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { useActionState, useOptimistic, useState, useTransition } from "react";
 import { moveDealToStage } from "@/app/actions/deals";
 import { addContent, addNote, markPosted, quickCreateDeal, unmarkPosted, updateDealField } from "@/app/actions/work";
 import { useAssistant } from "@/components/assistant";
+import { toast } from "@/components/toast";
 import { STAGES, type StageId } from "@/lib/constants";
 
 const inr = (n: number) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
@@ -46,7 +47,10 @@ export function InlineField({
       if (r.error) {
         setError(r.error);
         setShown(previous);
-      } else setError(null);
+      } else {
+        setError(null);
+        toast("Saved", { undoGroup: r.groupId });
+      }
     });
   }
 
@@ -98,8 +102,17 @@ export function StagePicker({ dealId, stage }: { dealId: string; stage: string }
         value={value}
         onChange={(e) => {
           const next = e.target.value as StageId;
+          const before = value;
           setValue(next);
-          start(() => moveDealToStage(dealId, next));
+          start(async () => {
+            try {
+              const r = await moveDealToStage(dealId, next);
+              toast(`Moved to ${STAGES.find((x) => x.id === next)?.label ?? next}`, { undoGroup: r?.groupId });
+            } catch {
+              setValue(before);
+              toast("Couldn't change the stage — try again.", { tone: "error" });
+            }
+          });
         }}
         className="absolute inset-0 cursor-pointer opacity-0"
       >
@@ -114,37 +127,60 @@ export function StagePicker({ dealId, stage }: { dealId: string; stage: string }
 export function ContentAdder({ dealId }: { dealId: string }) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
+  const [adding, addPending] = useOptimistic<string[], string>([], (list, t) => [...list, t]);
+  const [, start] = useTransition();
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        const t = text;
-        start(async () => {
-          const r = await addContent(dealId, t);
-          if (r.error) setError(r.error);
-          else {
-            setText("");
-            setError(null);
-          }
-        });
-      }}
-      className="flex gap-2"
-    >
-      <input value={text} onChange={(e) => setText(e.target.value)} placeholder='Add content — "2 reels, 1 story"' className="input py-1.5" />
-      <button disabled={pending || !text.trim()} className="btn-secondary shrink-0 px-3 py-1.5">{pending ? "…" : "Add content"}</button>
-      {error && <span className="self-center text-xs text-rose-600">{error}</span>}
-    </form>
+    <div>
+      {adding.map((t, i) => (
+        <p key={i} className="mb-2 text-sm text-slate-400">+ {t} <span className="text-xs">saving…</span></p>
+      ))}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          const t = text.trim();
+          if (!t) return;
+          setText(""); // clear straight away
+          start(async () => {
+            addPending(t);
+            const r = await addContent(dealId, t);
+            if (r.error) {
+              setError(r.error);
+              setText(t);
+            } else {
+              setError(null);
+              toast("Content added", { undoGroup: r.groupId });
+            }
+          });
+        }}
+        className="flex gap-2"
+      >
+        <input value={text} onChange={(e) => setText(e.target.value)} placeholder='Add content — "2 reels, 1 story"' className="input py-1.5" />
+        <button disabled={!text.trim()} className="btn-secondary shrink-0 px-3 py-1.5">Add content</button>
+      </form>
+      {error && <p className="mt-1 text-xs text-rose-600">{error}</p>}
+    </div>
   );
 }
 
 export function PostedButton({ deliverableId, posted }: { deliverableId: string; posted: boolean }) {
   const [asking, setAsking] = useState(false);
   const [link, setLink] = useState("");
-  const [pending, start] = useTransition();
-  if (posted)
+  const [shown, setShown] = useOptimistic(posted);
+  const [, start] = useTransition();
+  const save = (next: boolean) =>
+    start(async () => {
+      setShown(next);
+      setAsking(false);
+      try {
+        const r = next ? await markPosted(deliverableId, link) : await unmarkPosted(deliverableId);
+        toast(next ? "Marked as posted" : "Marked as not posted", { undoGroup: r?.groupId });
+      } catch {
+        toast("Couldn't save — try again.", { tone: "error" });
+      }
+    });
+  if (shown)
     return (
-      <button type="button" disabled={pending} onClick={() => start(() => unmarkPosted(deliverableId))} className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800" title="Tap to undo">
+      <button type="button" onClick={() => save(false)} className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800" title="Tap to undo">
         Posted ✓
       </button>
     );
@@ -153,12 +189,12 @@ export function PostedButton({ deliverableId, posted }: { deliverableId: string;
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          start(() => markPosted(deliverableId, link));
+          save(true);
         }}
         className="flex w-full gap-1.5 sm:w-auto"
       >
         <input autoFocus value={link} onChange={(e) => setLink(e.target.value)} placeholder="Post link (optional)" className="input min-w-0 py-1 text-xs" />
-        <button disabled={pending} className="btn-primary px-2.5 py-1 text-xs">{pending ? "…" : "Save"}</button>
+        <button className="btn-primary px-2.5 py-1 text-xs">Save</button>
       </form>
     );
   return (
@@ -170,22 +206,34 @@ export function PostedButton({ deliverableId, posted }: { deliverableId: string;
 
 export function NoteAdder({ dealId }: { dealId: string }) {
   const [text, setText] = useState("");
-  const [pending, start] = useTransition();
+  const [adding, addPending] = useOptimistic<string[], string>([], (list, t) => [...list, t]);
+  const [, start] = useTransition();
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        const t = text;
-        start(async () => {
-          const r = await addNote(dealId, t);
-          if (!r.error) setText("");
-        });
-      }}
-      className="flex gap-2"
-    >
-      <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Add a note — what they said, what's next…" className="input py-1.5" />
-      <button disabled={pending || !text.trim()} className="btn-secondary shrink-0 px-3 py-1.5">{pending ? "…" : "Add note"}</button>
-    </form>
+    <div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          const t = text.trim();
+          if (!t) return;
+          setText("");
+          start(async () => {
+            addPending(t);
+            const r = await addNote(dealId, t);
+            if (r.error) {
+              setText(t);
+              toast(`Couldn't save the note: ${r.error}`, { tone: "error" });
+            } else toast("Note added", { undoGroup: r.groupId });
+          });
+        }}
+        className="flex gap-2"
+      >
+        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Add a note — what they said, what's next…" className="input py-1.5" />
+        <button disabled={!text.trim()} className="btn-secondary shrink-0 px-3 py-1.5">Add note</button>
+      </form>
+      {adding.map((t, i) => (
+        <p key={i} className="mt-2 text-sm text-slate-400">{t} <span className="text-xs">saving…</span></p>
+      ))}
+    </div>
   );
 }
 

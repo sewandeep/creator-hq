@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { setCategory } from "@/app/actions/finance";
+import { toast } from "@/components/toast";
 import { KIND_LABEL, type CategoryKind } from "@/lib/finance/categories";
 
 export type Cat = { id: string; name: string; kind: string; emoji: string | null };
@@ -45,14 +47,24 @@ export function CategorySelect({
 
 /** Inline category changer for transaction lists (no "remember"). */
 export function InlineCategory({ transactionId, categories, value }: { transactionId: string; categories: Cat[]; value: string | null }) {
+  // Shows your choice immediately; saves in the background.
+  const [shown, setShown] = useState(value ?? "");
   return (
-    <form>
+    <form aria-label="Category">
       <CategorySelect
         categories={categories}
-        value={value ?? ""}
+        value={shown}
         placeholder="❓ Choose…"
-        className={`w-full max-w-52 rounded-md border bg-white px-2 py-1 text-xs ${value ? "border-slate-200 text-slate-700" : "border-amber-300 text-amber-800"}`}
-        onChange={(id) => void setCategory({ transactionId, categoryId: id || null })}
+        className={`w-full max-w-52 rounded-md border bg-white px-2 py-1 text-xs ${shown ? "border-slate-200 text-slate-700" : "border-amber-300 text-amber-800"}`}
+        onChange={async (id) => {
+          const before = shown;
+          setShown(id);
+          const r = await setCategory({ transactionId, categoryId: id || null }).catch(() => ({ error: "Couldn't save.", groupId: undefined }));
+          if (r.error) {
+            setShown(before);
+            toast(`Couldn't save: ${r.error}`, { tone: "error" });
+          } else toast(`Category: ${categories.find((c) => c.id === id)?.name ?? "none"}`, { undoGroup: r.groupId });
+        }}
       />
     </form>
   );

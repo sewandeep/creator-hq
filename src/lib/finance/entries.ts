@@ -94,7 +94,7 @@ export type SetCategoryInput = {
   note?: string | null;
   person?: string | null;
 };
-export type SetCategoryResult = { ok?: boolean; error?: string; alsoUpdated?: number; pattern?: string };
+export type SetCategoryResult = { ok?: boolean; error?: string; alsoUpdated?: number; pattern?: string; groupId?: string };
 
 /**
  * Set a transaction's category. With `remember`, also creates a rule

@@ -15,8 +15,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       await supabase.from("statements").update({ status: "failed", error: message }).eq("id", id);
       return NextResponse.json({ status: "failed", message });
     }
-    const progress = st.error?.startsWith("progress: ") ? st.error.slice(10) : null;
-    return NextResponse.json({ status: "processing", progress });
+    const { data: job } = await supabase.from("jobs").select("id, steps, status").eq("ref_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const steps = Array.isArray(job?.steps) ? (job.steps as { text?: string }[]) : [];
+    const progress = steps.at(-1)?.text ?? (st.error?.startsWith("progress: ") ? st.error.slice(10) : null);
+    return NextResponse.json({ status: "processing", progress, jobId: job?.id ?? null });
   }
   if (st.status !== "done") return NextResponse.json({ status: st.status, message: st.error ?? "Couldn't read this statement." });
   const { count } = await supabase.from("transactions").select("id", { count: "exact", head: true }).eq("statement_id", id).eq("needs_review", true);

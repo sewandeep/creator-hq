@@ -9,6 +9,10 @@ export async function GET() {
   const ids = list.flatMap((m) => m.proposal_ids);
   const { data: props } = ids.length ? await supabase.from("ai_proposals").select("id, kind, summary, payload, status, result").in("id", ids) : { data: [] };
   const byId = new Map((props ?? []).map((p) => [p.id, p]));
+  const isPending = (a: unknown) => Array.isArray(a) && a.some((x) => x !== null && typeof x === "object" && "pending" in x);
+  const pendingIds = list.filter((m) => isPending(m.attachments)).map((m) => m.id);
+  const { data: jobs } = pendingIds.length ? await supabase.from("jobs").select("id, ref_id").in("ref_id", pendingIds) : { data: [] };
+  const jobFor = new Map((jobs ?? []).map((j) => [j.ref_id, j.id]));
   const isObj = (a: unknown): a is Record<string, unknown> => a !== null && typeof a === "object";
   return NextResponse.json(
     list.map((m) => ({
@@ -17,7 +21,8 @@ export async function GET() {
       content: m.content,
       attachments: Array.isArray(m.attachments) ? m.attachments.filter((a) => isObj(a) && "name" in a) : [],
       proposals: m.proposal_ids.map((id) => byId.get(id)).filter(Boolean),
-      pending: Array.isArray(m.attachments) && m.attachments.some((a) => isObj(a) && "pending" in a),
+      pending: isPending(m.attachments),
+      jobId: jobFor.get(m.id) ?? null,
     })),
   );
 }

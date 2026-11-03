@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { MAIN_NAV, MORE_NAV, sectionOf } from "@/lib/nav-items";
 import { useAssistant } from "./assistant";
 
@@ -14,9 +14,16 @@ function Icon({ d, className = "h-5 w-5" }: { d: string; className?: string }) {
   );
 }
 
-export function SideNav() {
+/** The tab you tapped lights up immediately, before the page has arrived. */
+function useSection() {
   const pathname = usePathname();
-  const section = sectionOf(pathname);
+  const [tapped, setTapped] = useState<{ href: string; from: string } | null>(null);
+  const section = tapped && tapped.from === pathname ? tapped.href : sectionOf(pathname);
+  return { pathname, section, tap: (href: string) => setTapped({ href, from: pathname }) };
+}
+
+export function SideNav() {
+  const { pathname, section, tap } = useSection();
   const { toggle, isOpen } = useAssistant();
   return (
     <nav className="flex flex-1 flex-col gap-1">
@@ -32,6 +39,8 @@ export function SideNav() {
         <Link
           key={item.href}
           href={item.href}
+          prefetch
+          onClick={() => tap(item.href)}
           className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-medium transition-colors ${
             section === item.href ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
           }`}
@@ -55,11 +64,10 @@ export function SideNav() {
 }
 
 export function BottomNav() {
-  const pathname = usePathname();
-  const section = sectionOf(pathname);
+  const { section, tap } = useSection();
   const { toggle, isOpen } = useAssistant();
   const item = (n: (typeof MAIN_NAV)[number]) => (
-    <Link key={n.href} href={n.href} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium ${section === n.href ? "text-slate-900" : "text-slate-400"}`}>
+    <Link key={n.href} href={n.href} prefetch onClick={() => tap(n.href)} className={`flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium ${section === n.href ? "text-slate-900" : "text-slate-400"}`}>
       <Icon d={n.icon} />
       {n.label}
     </Link>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { acceptGuess, dismissInvoiceSuggestion, recordAsInvoicePayment, setCategory } from "@/app/actions/finance";
+import { toast } from "@/components/toast";
 import { CategorySelect, type Cat } from "./category-select";
 
 export type ReviewTxn = {
@@ -43,17 +44,24 @@ export function ReviewCard({ t, categories, quick }: { t: ReviewTxn; categories:
       setMsg("Pick a category first.");
       return;
     }
+    // Done on screen straight away; the save happens in the background.
+    setCategoryId(id);
+    setDone(true);
+    setMsg(null);
     start(async () => {
-      const r = await setCategory({ transactionId: t.id, categoryId: id, remember, pattern, note, person: person || null });
-      if (r.error) setMsg(r.error);
-      else {
-        setDone(true);
-        setMsg(r.alsoUpdated ? `Saved — and ${r.alsoUpdated} similar transaction${r.alsoUpdated === 1 ? "" : "s"} updated too.` : "Saved.");
+      const r = await setCategory({ transactionId: t.id, categoryId: id, remember, pattern, note, person: person || null }).catch((e: unknown) => ({ error: e instanceof Error ? e.message : "Couldn't save.", alsoUpdated: 0, groupId: undefined }));
+      if (r.error) {
+        setDone(false);
+        setMsg(r.error);
+        toast(`Couldn't save: ${r.error}`, { tone: "error" });
+      } else {
+        if (r.alsoUpdated) setMsg(`${r.alsoUpdated} similar transaction${r.alsoUpdated === 1 ? "" : "s"} updated too.`);
+        toast(r.alsoUpdated ? `Saved + ${r.alsoUpdated} similar` : "Saved", { undoGroup: r.groupId });
       }
     });
   }
 
-  if (done) return <div className="card px-4 py-3 text-sm text-emerald-700">✓ {inr(t.amount)} · {chosen?.emoji} {chosen?.name}. {msg}</div>;
+  if (done) return <div className="card px-4 py-3 text-sm text-emerald-700">✓ {inr(t.amount)} · {t.counterparty || t.description.slice(0, 30)} → {chosen?.emoji} {chosen?.name}{msg ? `. ${msg}` : ""}</div>;
 
   return (
     <div className="card p-4">
@@ -83,21 +91,23 @@ export function ReviewCard({ t, categories, quick }: { t: ReviewTxn; categories:
             type="button"
             disabled={pending}
             className="btn-primary px-3 py-1"
-            onClick={() =>
+            onClick={() => {
+              setDone(true);
+              setMsg(`Recorded as payment for ${t.invoice!.number}.`);
               start(async () => {
                 try {
-                  await recordAsInvoicePayment(t.id, t.invoice!.id);
-                  setDone(true);
-                  setMsg(`Recorded as payment for ${t.invoice!.number}.`);
+                  const r = await recordAsInvoicePayment(t.id, t.invoice!.id);
+                  toast(`Payment recorded for ${t.invoice!.number}`, { undoGroup: r?.groupId });
                 } catch (e) {
+                  setDone(false);
                   setMsg(e instanceof Error ? e.message : "Couldn't record it.");
                 }
-              })
-            }
+              });
+            }}
           >
             Yes, record payment
           </button>
-          <button type="button" disabled={pending} className="btn-ghost px-3 py-1" onClick={() => start(() => dismissInvoiceSuggestion(t.id))}>
+          <button type="button" disabled={pending} className="btn-ghost px-3 py-1" onClick={() => start(async () => { await dismissInvoiceSuggestion(t.id); })}>
             No
           </button>
         </div>
@@ -108,7 +118,8 @@ export function ReviewCard({ t, categories, quick }: { t: ReviewTxn; categories:
           <button
             key={c.id}
             type="button"
-            onClick={() => setCategoryId(c.id)}
+            onClick={() => save(c.id)}
+            title="Tap to save"
             className={`rounded-full px-2.5 py-1 text-xs ${categoryId === c.id ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
           >
             {c.emoji} {c.name}
@@ -132,7 +143,24 @@ export function ReviewCard({ t, categories, quick }: { t: ReviewTxn; categories:
           {pending ? "Saving…" : "Save"}
         </button>
         {guess && !t.invoice && (
-          <button type="button" onClick={() => start(async () => { await acceptGuess(t.id); setDone(true); setMsg("Kept the suggestion."); })} disabled={pending} className="btn-secondary">
+          <button
+            type="button"
+            onClick={() => {
+              setDone(true);
+              setMsg("Kept the suggestion.");
+              start(async () => {
+                try {
+                  const r = await acceptGuess(t.id);
+                  toast("Kept", { undoGroup: r?.groupId });
+                } catch {
+                  setDone(false);
+                  setMsg("Couldn't save — try again.");
+                }
+              });
+            }}
+            disabled={pending}
+            className="btn-secondary"
+          >
             Keep “{guess.name}”
           </button>
         )}

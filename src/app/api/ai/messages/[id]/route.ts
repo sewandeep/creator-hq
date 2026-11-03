@@ -10,6 +10,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const pending = Array.isArray(m.attachments) && m.attachments.some((a) => a && typeof a === "object" && "pending" in a);
   if (pending) {
+    // The job ended without saving an answer (stopped, timed out, cut off): say so.
+    const { data: job } = await supabase.from("jobs").select("status, error").eq("ref_id", id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (job && job.status !== "running") {
+      const content = job.status === "cancelled" ? "⏹ Stopped — nothing was saved." : `⚠️ ${job.error ?? "This didn't finish. Please try again."}`;
+      await supabase.from("ai_messages").update({ content, attachments: [] }).eq("id", id);
+      return NextResponse.json({ pending: false, content, proposals: [] });
+    }
     // If the background work died (it has a 5-minute limit), stop waiting.
     if (Date.now() - new Date(m.created_at).getTime() > 6 * 60_000) {
       const content = "⚠️ This took too long and stopped. Please try again — maybe with a shorter question or a smaller file.";

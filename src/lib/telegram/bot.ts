@@ -3,6 +3,7 @@ import type { DB } from "@/app/actions/helpers";
 import { suggestPattern } from "@/lib/finance/categorize";
 import { ensureCategories, type Category } from "@/lib/finance/categories-server";
 import { runAssistant } from "@/lib/ai/assistant";
+import type { JobCtx } from "@/lib/jobs";
 import { applyProposal, cancelProposal } from "@/lib/ai/apply";
 import type { InFile } from "@/lib/ai/files";
 import { mdToTelegram } from "@/lib/ai/format";
@@ -35,7 +36,7 @@ export type TgUpdate = {
   callback_query?: { id: string; data?: string; message?: TgMessage; from: TgUser };
 };
 
-type Owner = { userId: string; chatId: number; state: BotState; reminders: { digest?: boolean; statements?: boolean }; db: DB };
+type Owner = { userId: string; chatId: number; state: BotState; reminders: { digest?: boolean; statements?: boolean }; db: DB; job?: JobCtx };
 
 export function appUrl() {
   const u = process.env.APP_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "");
@@ -63,12 +64,12 @@ const HELP = `<b>Here's what I can do</b>
 /owe — who owes you money`;
 
 /** Handles one Telegram update. Long work (reading a statement) is returned to run after replying. */
-export async function handleUpdate(update: TgUpdate): Promise<(() => Promise<void>) | void> {
+export async function handleUpdate(update: TgUpdate, job?: JobCtx): Promise<(() => Promise<void>) | void> {
   const msg = update.message ?? update.callback_query?.message;
   const chatId = msg?.chat.id;
   if (!chatId || msg?.chat.type !== "private") return;
 
-  const owner = await findOwner(chatId);
+  const owner = await findOwner(chatId, job);
   if (!owner) {
     const text = update.message?.text?.trim() ?? "";
     const code = text.match(/^\/start\s+([A-Za-z0-9_-]{6,64})$/)?.[1];
@@ -86,7 +87,8 @@ export async function handleUpdate(update: TgUpdate): Promise<(() => Promise<voi
 }
 
 // ---------------------------------------------------------------------------
-async function findOwner(chatId: number): Promise<Owner | null> {
+/** Whose chat this is. Changes go through the job's client, so Activity can undo them. */
+export async function findOwner(chatId: number, job?: JobCtx): Promise<Owner | null> {
   const { data } = await createAdminClient().from("profile").select("user_id, telegram_state, reminders").eq("telegram_chat_id", chatId).maybeSingle();
   if (!data) return null;
   return {
@@ -94,7 +96,8 @@ async function findOwner(chatId: number): Promise<Owner | null> {
     chatId,
     state: (data.telegram_state ?? {}) as BotState,
     reminders: (data.reminders ?? {}) as Owner["reminders"],
-    db: createAdminClient(data.user_id),
+    db: job?.db ?? createAdminClient(data.user_id),
+    job,
   };
 }
 
@@ -162,7 +165,7 @@ async function onMessage(o: Owner, m: TgMessage): Promise<(() => Promise<void>) 
     await saveState(o, { awaiting: undefined, statementId: undefined });
     await deleteMessage(o.chatId, m.message_id);
     await send(o.chatId, "🔑 Trying that password…");
-    return async () => reportStatement(o, await processStatement(o.db, statementId, text));
+    return async () => reportStatement(o, await processStatement(o.db, statementId, text, o.job));
   }
 
   const cmd = text.match(/^\/(\w+)/)?.[1]?.toLowerCase();
@@ -195,11 +198,8 @@ async function onMessage(o: Owner, m: TgMessage): Promise<(() => Promise<void>) 
   if (!isQuickEntry(text, todayIST())) {
     await typing(o.chatId);
     return async () => {
-      try {
-        await askAssistant(o, text, []);
-      } catch (e) {
-        await send(o.chatId, `⚠️ ${esc(e instanceof Error ? e.message : String(e))}`);
-      }
+      // A failure is reported in the chat (and shown in Activity) by the job.
+      await askAssistant(o, text, []);
     };
   }
 
@@ -405,7 +405,7 @@ function startStatement(o: Owner, file: { fileId: string; fileName: string }, ac
       if (upError) throw new Error(upError.message);
       const { data: st, error } = await o.db.from("statements").insert({ account_id: accountId, file_path: path, file_name: file.fileName.slice(0, 200) }).select("id").single();
       if (error) throw new Error(error.message);
-      const r = await processStatement(o.db, st.id);
+      const r = await processStatement(o.db, st.id, undefined, o.job);
       if (r.status === "needs_password") {
         await saveState(o, { awaiting: "password", statementId: st.id });
         return void (await send(o.chatId, `🔒 ${esc(r.message)}\n\nSend the password as your next message. It's saved for this account, so you won't need it again — and I'll delete your message right away.`));
@@ -440,7 +440,7 @@ async function reportStatement(o: Owner, r: ProcessResult) {
 // ---------------------------------------------------------------------------
 async function askAssistant(o: Owner, text: string, files: InFile[]) {
   await typing(o.chatId);
-  const r = await runAssistant(o.db, o.userId, { text, files, channel: "telegram" });
+  const r = await runAssistant(o.db, o.userId, { text, files, channel: "telegram", job: o.job });
   await send(o.chatId, mdToTelegram(r.reply) || "👍");
   for (const p of r.proposals) {
     const url = appUrl();

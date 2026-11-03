@@ -77,6 +77,20 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"audit_log": {
+                  Row: {
+                    "after": Json | null,"at": string,"before": Json | null,"group_id": string,"id": number,"job_id": string | null,"op": string,"row_id": string,"table_name": string,"undo_of": string | null,"undone_at": string | null,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "after"?: Json | null,"at"?: string,"before"?: Json | null,"group_id": string,"id"?: never,"job_id"?: string | null,"op": string,"row_id": string,"table_name": string,"undo_of"?: string | null,"undone_at"?: string | null,"user_id": string
+                  }
+                  Update: {
+                    "after"?: Json | null,"at"?: string,"before"?: Json | null,"group_id"?: string,"id"?: never,"job_id"?: string | null,"op"?: string,"row_id"?: string,"table_name"?: string,"undo_of"?: string | null,"undone_at"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"bank_accounts": {
                   Row: {
                     "bank": string,"created_at": string,"id": string,"is_archived": boolean,"last4": string | null,"name": string,"pdf_password": string | null,"user_id": string
@@ -317,6 +331,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"jobs": {
+                  Row: {
+                    "cancel_requested": boolean,"created_at": string,"error": string | null,"finished_at": string | null,"id": string,"kind": string,"ref_id": string | null,"result": Json | null,"source": string,"status": string,"steps": NonNullable<Json>,"summary": string | null,"title": string,"updated_at": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "cancel_requested"?: boolean,"created_at"?: string,"error"?: string | null,"finished_at"?: string | null,"id"?: string,"kind": string,"ref_id"?: string | null,"result"?: Json | null,"source"?: string,"status"?: string,"steps"?: NonNullable<Json>,"summary"?: string | null,"title": string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "cancel_requested"?: boolean,"created_at"?: string,"error"?: string | null,"finished_at"?: string | null,"id"?: string,"kind"?: string,"ref_id"?: string | null,"result"?: Json | null,"source"?: string,"status"?: string,"steps"?: NonNullable<Json>,"summary"?: string | null,"title"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"payments": {
                   Row: {
                     "brand_id": string,"created_at": string,"deal_id": string | null,"gross_amount": number,"id": string,"invoice_id": string | null,"mode": string | null,"net_amount": number | null,"notes": string | null,"received_date": string,"reference": string | null,"tds_amount": number,"tds_section": string | null,"updated_at": string,"user_id": string
@@ -493,8 +521,14 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "refresh_invoice":
+            "job_step":
+{ Args: { "p_job": string,"p_text": string }; Returns: boolean
+                           },
+"refresh_invoice":
 { Args: { "p_invoice": string }; Returns: undefined
+                           },
+"undo_group":
+{ Args: { "p_group": string }; Returns: Json
                            }
           }
           Enums: {

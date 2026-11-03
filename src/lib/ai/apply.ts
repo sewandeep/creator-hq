@@ -8,6 +8,7 @@ import { rupees } from "@/lib/format";
 import { buildRows, IMPORT_FIELDS, type ColumnMapping } from "@/lib/import";
 import { importRowsCore } from "@/lib/import-server";
 import { createDraftInvoiceFromDeal } from "@/lib/invoice-draft";
+import type { JobCtx } from "@/lib/jobs";
 import type { Json } from "@/lib/supabase/database.types";
 
 export type ApplyResult = { ok: boolean; message: string; link?: string; needsPassword?: boolean };
@@ -20,7 +21,7 @@ const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : nul
  * Carries out an action the assistant prepared — only ever called when you
  * tap Confirm. `edits` are fields you changed on the card before confirming.
  */
-export async function applyProposal(db: DB, userId: string, proposalId: string, opts: { edits?: P; password?: string } = {}): Promise<ApplyResult> {
+export async function applyProposal(db: DB, userId: string, proposalId: string, opts: { edits?: P; password?: string; job?: JobCtx } = {}): Promise<ApplyResult> {
   const { data: prop } = await db.from("ai_proposals").select("*").eq("id", proposalId).eq("user_id", userId).maybeSingle();
   if (!prop) return { ok: false, message: "That action wasn't found." };
   if (prop.status === "applied") return { ok: true, message: "Already done." };
@@ -29,7 +30,7 @@ export async function applyProposal(db: DB, userId: string, proposalId: string, 
   const payload = { ...(prop.payload as P), ...(opts.edits ?? {}) };
   let result: ApplyResult;
   try {
-    result = await run(db, userId, prop.kind, payload, opts.password);
+    result = await run(db, userId, prop.kind, payload, opts.password, opts.job);
   } catch (e) {
     result = { ok: false, message: e instanceof Error ? e.message : String(e) };
   }
@@ -45,7 +46,7 @@ export async function cancelProposal(db: DB, userId: string, proposalId: string)
   await db.from("ai_proposals").update({ status: "cancelled" }).eq("id", proposalId).eq("user_id", userId).eq("status", "pending");
 }
 
-async function run(db: DB, userId: string, kind: string, p: P, password?: string): Promise<ApplyResult> {
+async function run(db: DB, userId: string, kind: string, p: P, password?: string, job?: JobCtx): Promise<ApplyResult> {
   switch (kind) {
     case "new_deal": {
       const brandId = await findOrCreateBrand(db, s(p.brand)!);
@@ -153,7 +154,7 @@ async function run(db: DB, userId: string, kind: string, p: P, password?: string
         if (error) throw new Error(error.message);
         statementId = st.id;
       }
-      const r = await processStatement(db, statementId, password);
+      const r = await processStatement(db, statementId, password, job);
       if (r.status === "needs_password") {
         // Remember the statement so a retry with the password doesn't upload it twice.
         await db.from("ai_proposals").update({ payload: { ...p, statement_id: statementId } as unknown as NonNullable<Json> }).eq("kind", "statement_import").eq("status", "pending").contains("payload", { file_path: path });

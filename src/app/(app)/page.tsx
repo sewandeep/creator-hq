@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Tap, TapRow } from "@/components/tap";
 import { followedUp, invoiceAndSend, snoozeFollowUp } from "@/app/actions/quick";
 import { AskBox } from "@/components/ask-box";
 import { RundownCard } from "@/components/rundown-card";
@@ -27,7 +28,7 @@ export default async function Today() {
   const lastMonth = shiftMonth(ym, -1);
   const lm = monthRange(lastMonth);
 
-  const [profile, followUps, due, toInvoice, overdue, review, accounts, statements, payments, unpaid, openDeals, upcomingDel, upcomingFollow, rundown, monthTxns] = await Promise.all([
+  const [profile, followUps, due, toInvoice, overdue, review, accounts, statements, payments, unpaid, openDeals, upcomingDel, upcomingFollow, rundown, monthTxns, failedJobs] = await Promise.all([
     supabase.from("profile").select("display_name, legal_name").maybeSingle(),
     supabase.from("deals").select("id, title, next_follow_up, brand:brands(name)").lte("next_follow_up", today).not("stage", "in", "(paid,lost)").order("next_follow_up").limit(8),
     supabase.from("deliverables").select("id, type, quantity, due_date, deal:deals(id, title, brand:brands(name))").neq("status", "posted").lte("due_date", addDays(today, 3)).order("due_date").limit(8),
@@ -43,6 +44,7 @@ export default async function Today() {
     supabase.from("deals").select("id, title, next_follow_up, brand:brands(name)").gt("next_follow_up", today).lte("next_follow_up", addDays(today, 7)).not("stage", "in", "(paid,lost)").order("next_follow_up").limit(6),
     supabase.from("ai_messages").select("content, created_at").eq("channel", "rundown").eq("role", "assistant").order("created_at", { ascending: false }).limit(1).maybeSingle(),
     loadTxns(supabase, `${ym}-01`, today, userId),
+    supabase.from("jobs").select("id, title").eq("status", "failed").gte("created_at", addDays(today, -2)).order("created_at", { ascending: false }).limit(5),
   ]);
 
   const name = (profile.data?.display_name || profile.data?.legal_name || "").split(" ")[0];
@@ -53,6 +55,17 @@ export default async function Today() {
 
   // ---- What needs you ----
   const items: Item[] = [];
+  if (failedJobs.data?.length) {
+    const n = failedJobs.data.length;
+    items.push({
+      key: "failed",
+      icon: "⚠️",
+      title: n === 1 ? <>Something didn&apos;t finish: {failedJobs.data[0].title}</> : `${n} tasks didn't finish in the last 2 days`,
+      sub: "See what happened and try again",
+      tone: "red",
+      actions: <Link href="/activity?show=failed" className="btn-secondary px-3 py-1.5 text-xs">Open Activity</Link>,
+    });
+  }
   const missing = (accounts.data ?? []).filter(
     (a) => !(statements.data ?? []).some((s) => s.account_id === a.id && s.period_to && (s.period_to >= addDays(lm.to, -3) || s.created_at.slice(0, 10) > lm.to)),
   );
@@ -84,8 +97,8 @@ export default async function Today() {
       tone: f.next_follow_up! < today ? "red" : "amber",
       actions: (
         <>
-          <form action={followedUp.bind(null, f.id, 3)}><button className="btn-primary px-3 py-1.5 text-xs" title="Log it and remind me again in 3 days">Done ✓</button></form>
-          <form action={snoozeFollowUp.bind(null, f.id, 2)}><button className="btn-secondary px-3 py-1.5 text-xs">Later</button></form>
+          <Tap action={followedUp.bind(null, f.id, 3)} className="btn-primary px-3 py-1.5 text-xs" title="Log it and remind me again in 3 days" hideRow saved="Follow-up logged">Done ✓</Tap>
+          <Tap action={snoozeFollowUp.bind(null, f.id, 2)} className="btn-secondary px-3 py-1.5 text-xs" hideRow saved="Snoozed">Later</Tap>
           <Link href={`/deals?deal=${f.id}`} className="btn-ghost px-2 py-1.5 text-xs">Open</Link>
         </>
       ),
@@ -107,7 +120,7 @@ export default async function Today() {
       icon: "🧾",
       title: <>Send the invoice to <b>{d.brand?.name}</b></>,
       sub: `${d.title} · ${rupees(d.amount)} — content is posted`,
-      actions: <form action={invoiceAndSend.bind(null, d.id)}><button className="btn-primary px-3 py-1.5 text-xs">Create & send</button></form>,
+      actions: <Tap action={invoiceAndSend.bind(null, d.id)} className="btn-primary px-3 py-1.5 text-xs" done="Opening…" saved="">Create & send</Tap>,
     });
   }
   for (const i of overdue.data ?? []) {
@@ -158,7 +171,7 @@ export default async function Today() {
         {items.length ? (
           <ul className="divide-y divide-slate-100">
             {items.map((it) => (
-              <li key={it.key} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
+              <TapRow key={it.key} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
                 <span className="relative text-xl leading-none">
                   {it.icon}
                   {it.tone && <span className={`absolute -top-0.5 -right-1 h-2 w-2 rounded-full ${toneDot[it.tone]}`} />}
@@ -168,7 +181,7 @@ export default async function Today() {
                   {it.sub && <div className="truncate text-xs text-slate-500">{it.sub}</div>}
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">{it.actions}</div>
-              </li>
+              </TapRow>
             ))}
           </ul>
         ) : (

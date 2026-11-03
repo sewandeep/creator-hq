@@ -3,8 +3,10 @@ import readXlsxFile from "read-excel-file/node";
 import type { DB } from "@/app/actions/helpers";
 import type { GeminiPart } from "@/lib/finance/gemini";
 import { PdfPasswordError, extractPdfPages, maskAccountNumbers } from "@/lib/finance/pdf-text";
+import { isGroqConfigured, transcribe } from "@/lib/groq";
 
-export type InFile = { name: string; mime: string; bytes: Uint8Array };
+/** `path` is set when the browser already uploaded it to the inbox. */
+export type InFile = { name: string; mime: string; bytes: Uint8Array; path?: string };
 export type FileRef = { id: string; path: string; name: string; mime: string; kind: string };
 
 const MAX_TEXT = 40_000;
@@ -36,9 +38,11 @@ export async function prepareFiles(supabase: DB, userId: string, files: InFile[]
     const kind = kindOf(f);
     const mime = f.mime.split(";")[0].trim() || "application/octet-stream";
     const safe = f.name.replace(/[^\w.\- ]+/g, "_").slice(-100) || "file";
-    const path = `${userId}/${crypto.randomUUID()}-${safe}`;
-    const { error } = await supabase.storage.from("inbox").upload(path, f.bytes, { contentType: mime });
-    if (error) throw new Error(`Couldn't store ${f.name}: ${error.message}`);
+    const path = f.path ?? `${userId}/${crypto.randomUUID()}-${safe}`;
+    if (!f.path) {
+      const { error } = await supabase.storage.from("inbox").upload(path, f.bytes, { contentType: mime });
+      if (error) throw new Error(`Couldn't store ${f.name}: ${error.message}`);
+    }
     refs.push({ id, path, name: f.name, mime, kind });
 
     const label = `Attached file ${id}: "${f.name}" (${kind})`;
@@ -57,6 +61,10 @@ export async function prepareFiles(supabase: DB, userId: string, files: InFile[]
           if (e instanceof PdfPasswordError) parts.push({ text: `${label}. This PDF is password-protected, so it can't be read yet. Password-protected PDFs are almost always bank statements (e.g. SBI).` });
           else throw e;
         }
+      } else if (kind === "audio" && isGroqConfigured()) {
+        // Turned into text first: works for iPhone recordings and is much faster.
+        const said = await transcribe(f.bytes, f.name, mime);
+        parts.push({ text: said ? `${label}. It's a voice note. What was said: "${said}". Act on it.` : `${label}. It's a voice note, but nothing could be heard in it.` });
       } else if (kind === "image" || kind === "audio") {
         parts.push({ text: `${label}.${kind === "audio" ? " It's a voice note — listen to it and act on what was said." : ""}` });
         parts.push({ inlineData: { mimeType: kind === "audio" && mime === "video/webm" ? "audio/webm" : mime, data: Buffer.from(f.bytes).toString("base64") } });

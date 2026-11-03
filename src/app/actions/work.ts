@@ -14,7 +14,7 @@ const FIELDS = ["title", "amount", "due_date", "next_follow_up", "platform", "no
 type Field = (typeof FIELDS)[number];
 
 /** Edit one field of a deal in place. Returns an error message if the value doesn't make sense. */
-export async function updateDealField(dealId: string, field: Field, raw: string): Promise<{ error?: string }> {
+export async function updateDealField(dealId: string, field: Field, raw: string): Promise<{ error?: string; groupId?: string }> {
   if (!FIELDS.includes(field)) return { error: "Can't change that." };
   const { supabase } = await requireUser();
   const v = raw.trim();
@@ -38,12 +38,11 @@ export async function updateDealField(dealId: string, field: Field, raw: string)
   if (field === "amount" || field === "due_date") {
     await supabase.from("activities").insert({ deal_id: dealId, brand_id: deal.brand_id, kind: "system", body: field === "amount" ? `Fee set to ${value === null ? "—" : rupees(value)}` : `Deadline set to ${value ? fmtDate(String(value)) : "none"}` });
   }
-  refreshAll();
-  return {};
+  return refreshAll();
 }
 
 /** "2 reels, 1 story" → content items on the deal. */
-export async function addContent(dealId: string, text: string): Promise<{ error?: string }> {
+export async function addContent(dealId: string, text: string): Promise<{ error?: string; groupId?: string }> {
   const { supabase } = await requireUser();
   const items = parseDeliverables(text);
   if (!items.length) return { error: 'Try something like "2 reels, 1 story".' };
@@ -52,8 +51,7 @@ export async function addContent(dealId: string, text: string): Promise<{ error?
     items.map((d) => ({ deal_id: dealId, type: d.type, quantity: d.quantity, notes: "note" in d ? d.note ?? null : null, platform: deal?.platform ?? null, due_date: deal?.due_date ?? null })),
   );
   if (error) return { error: error.message };
-  refreshAll();
-  return {};
+  return refreshAll();
 }
 
 /** Content went live. When everything on the deal is posted, the deal moves to "Posted". */
@@ -70,19 +68,19 @@ export async function markPosted(deliverableId: string, link: string) {
   if (rest?.every((r) => r.status === "posted")) {
     await supabase.from("deals").update({ stage: "posted" }).eq("id", d.deal_id).in("stage", ["lead", "contacted", "negotiating", "confirmed", "in_progress"]);
   }
-  refreshAll();
+  return refreshAll();
 }
 
 export async function unmarkPosted(deliverableId: string) {
   const { supabase } = await requireUser();
   await supabase.from("deliverables").update({ status: "todo", posted_date: null }).eq("id", deliverableId);
-  refreshAll();
+  return refreshAll();
 }
 
 export async function removeContent(deliverableId: string) {
   const { supabase } = await requireUser();
   await supabase.from("deliverables").delete().eq("id", deliverableId);
-  refreshAll();
+  return refreshAll();
 }
 
 /** "Got paid" — records the rest of the invoice as received (with the usual TDS) and closes the deal. */
@@ -109,29 +107,28 @@ export async function markInvoicePaid(invoiceId: string) {
     await supabase.from("deals").update({ stage: "paid", next_follow_up: null }).eq("id", inv.deal_id);
     await supabase.from("activities").insert({ deal_id: inv.deal_id, brand_id: inv.brand_id, kind: "payment", body: `Paid: ${rupees(balance - tds)} in bank${tds ? ` + ${rupees(tds)} TDS` : ""}` });
   }
-  refreshAll();
+  return refreshAll();
 }
 
 /** Paid without an invoice (e.g. barter or paid directly). */
 export async function markDealPaid(dealId: string) {
   const { supabase } = await requireUser();
   await supabase.from("deals").update({ stage: "paid", next_follow_up: null }).eq("id", dealId);
-  refreshAll();
+  return refreshAll();
 }
 
-export async function addNote(dealId: string, text: string): Promise<{ error?: string }> {
+export async function addNote(dealId: string, text: string): Promise<{ error?: string; groupId?: string }> {
   const body = text.trim();
   if (!body) return { error: "Write something first." };
   const { supabase } = await requireUser();
   const { data: deal } = await supabase.from("deals").select("brand_id").eq("id", dealId).single();
   const { error } = await supabase.from("activities").insert({ deal_id: dealId, brand_id: deal?.brand_id ?? null, kind: "note", body });
   if (error) return { error: error.message };
-  refreshAll();
-  return {};
+  return refreshAll();
 }
 
 /** The short "fill it myself" form: brand, what, fee, where it stands. */
-export async function quickCreateDeal(_prev: { error?: string } | undefined, fd: FormData): Promise<{ error?: string }> {
+export async function quickCreateDeal(_prev: { error?: string } | undefined, fd: FormData): Promise<{ error?: string; groupId?: string }> {
   const { supabase } = await requireUser();
   const brand = String(fd.get("brand") ?? "").trim();
   if (!brand) return { error: "Which brand?" };

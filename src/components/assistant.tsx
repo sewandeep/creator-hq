@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Chat } from "@/app/(app)/ask/chat";
@@ -72,7 +73,10 @@ function Panel({ isOpen, close, queued, clearQueued }: { isOpen: boolean; close:
             <div className="text-sm font-semibold">✨ Assistant</div>
             <div className="truncate text-xs text-slate-500">{what ? `Knows you're looking at ${what}` : "Ask, add or drop a file"}</div>
           </div>
-          <button type="button" onClick={close} className="btn-ghost px-2" aria-label="Close assistant">✕</button>
+          <div className="flex shrink-0 items-center gap-1">
+            <Link href="/activity" className="btn-ghost px-2 py-1 text-xs text-slate-500" title="Everything the assistant did, with Undo">Activity</Link>
+            <button type="button" onClick={close} className="btn-ghost px-2" aria-label="Close assistant">✕</button>
+          </div>
         </div>
         <div className="min-h-0 flex-1">
           <Chat variant="panel" context={context} suggestions={suggestionsFor(context)} queued={queued} onQueuedTaken={clearQueued} />

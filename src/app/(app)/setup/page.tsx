@@ -91,6 +91,24 @@ export default async function SetupPage() {
         }
       : { ok: true, title: "Phase 5 — AI assistant" },
   );
+  const { error: safetyError } = await supabase.from("jobs").select("id").limit(0);
+  migrationChecks.push(
+    safetyError
+      ? {
+          ok: false,
+          title: "Safety net (Activity, Undo, live progress): database update not applied",
+          detail: (
+            <>
+              Run{" "}
+              <a className="link" href="https://github.com/sewandeep/creator-hq/blob/main/supabase/migrations/20261105000000_safety_net.sql" target="_blank" rel="noreferrer">
+                20261105000000_safety_net.sql
+              </a>{" "}
+              in the Supabase SQL Editor, then reload this page. Until then the AI, statements and Telegram can&apos;t start.
+            </>
+          ),
+        }
+      : { ok: true, title: "Safety net — Activity, Undo, live progress" },
+  );
   const { error: bucketError } = await supabase.storage.from("deal-files").list("", { limit: 1 });
   const { error: stmtBucketError } = await supabase.storage.from("statements").list("", { limit: 1 });
   const { data: profile } = await supabase.from("profile").select("legal_name, pan, bank_account_number").maybeSingle();
@@ -103,6 +121,9 @@ export default async function SetupPage() {
     stmtBucketError
       ? { ok: false, title: "Statement storage", detail: `Storage for bank statements isn't ready: ${stmtBucketError.message}. Run the Phase 3 file in the SQL Editor.` }
       : { ok: true, title: "Statement storage" },
+    process.env.GROQ_API_KEY
+      ? { ok: true, title: "Voice notes (Groq key)" }
+      : { ok: false, warn: true, title: "Voice notes (Groq key)", detail: <>Not added yet — get a free key at <b>console.groq.com</b> → API Keys, add it in Vercel as <code className="rounded bg-slate-100 px-1">GROQ_API_KEY</code>, then redeploy.</> },
     process.env.GEMINI_API_KEY
       ? { ok: true, title: "AI (Gemini key)", detail: <AiTest /> }
       : { ok: false, warn: true, title: "AI statement reader (Gemini key)", detail: <>Not added yet — get a free key at <b>aistudio.google.com/apikey</b> and add it in Vercel as <code className="rounded bg-slate-100 px-1">GEMINI_API_KEY</code>, then redeploy.</> },

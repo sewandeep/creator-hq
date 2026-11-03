@@ -76,7 +76,7 @@ export type { SetCategoryResult };
 export async function setCategory(input: SetCategoryInput): Promise<SetCategoryResult> {
   const { supabase } = await requireUser();
   const r = await applyCategory(supabase, input);
-  if (r.ok) refreshAll();
+  if (r.ok) return { ...r, ...(await refreshAll()) };
   return r;
 }
 
@@ -86,7 +86,7 @@ export async function acceptGuess(transactionId: string) {
   const { error } = await supabase.from("transactions").update({ needs_review: false, review_reason: null }).eq("id", transactionId);
   if (error) throw new Error(error.message);
   await logChange(supabase, transactionId, "reviewed", null, "kept the suggested category", "user");
-  refreshAll();
+  return refreshAll();
 }
 
 export async function saveTxnDetails(id: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
@@ -127,8 +127,8 @@ export async function quickAdd(_prev: ActionState, fd: FormData): Promise<Action
   const { supabase } = await requireUser();
   try {
     const r = await quickAddCore(supabase, requiredText(fd, "text", "Entry"), "manual", text(fd, "category_id"));
-    refreshAll();
-    return { ok: true, message: r.message };
+    const { groupId } = await refreshAll();
+    return { ok: true, message: r.message, groupId };
   } catch (e) {
     return toActionError(e);
   }
@@ -214,13 +214,13 @@ export async function recordAsInvoicePayment(transactionId: string, invoiceId: s
       .neq("id", t.id);
   }
   if (after?.status === "paid" && after.deal_id) await supabase.from("deals").update({ stage: "paid", next_follow_up: null }).eq("id", after.deal_id).neq("stage", "paid");
-  refreshAll();
+  return refreshAll();
 }
 
 export async function dismissInvoiceSuggestion(transactionId: string) {
   const { supabase } = await requireUser();
   await supabase.from("transactions").update({ suggested_invoice_id: null }).eq("id", transactionId);
-  refreshAll();
+  return refreshAll();
 }
 
 // ---------------------------------------------------------------------------

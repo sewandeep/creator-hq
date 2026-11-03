@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { undoChanges } from "@/app/actions/activity";
+import { JobProgress } from "@/components/job-progress";
+import { useJob } from "@/lib/use-job";
 
 export type Proposal = {
   id: string;
@@ -50,7 +53,35 @@ export function ProposalCard({ p: initial, onDone }: { p: Proposal; onDone?: () 
   const [password, setPassword] = useState("");
   const [needsPassword, setNeedsPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [undo, setUndo] = useState<"idle" | "working" | string>("idle");
+  const job = useJob(jobId);
   const fields = EDITABLE[p.kind] ?? [];
+  const jobEnded = Boolean(job && job.status !== "running");
+
+  // The background work finished: pick up the result.
+  useEffect(() => {
+    if (!jobEnded || !busy) return;
+    void (async () => {
+      const s = await fetch(`/api/ai/proposals/${p.id}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+      if (!s) return settle({ ok: false, message: "Couldn't check the result — reload the page." }, "confirm");
+      if (s.result?.needsPassword) return settle({ needsPassword: true, message: s.result.message }, "confirm");
+      settle(s.status === "applied" ? { ...s.result, ok: true } : { ok: false, message: s.result?.message ?? job?.error ?? "That didn't work." }, "confirm");
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobEnded]);
+
+  function settle(r: { ok?: boolean; message?: string; link?: string; needsPassword?: boolean }, action: "confirm" | "cancel") {
+    setBusy(false);
+    if (action === "cancel") return setP({ ...p, status: "cancelled" });
+    if (r.needsPassword) {
+      setNeedsPassword(true);
+      return setError(r.message ?? "This PDF needs a password.");
+    }
+    if (!r.ok) return setError(r.message ?? "That didn't work.");
+    setP({ ...p, status: "applied", result: { ok: true, message: r.message, link: r.link } });
+    onDone?.();
+  }
 
   async function act(action: "confirm" | "cancel") {
     setBusy(true);
@@ -58,7 +89,7 @@ export function ProposalCard({ p: initial, onDone }: { p: Proposal; onDone?: () 
     const editPayload = Object.fromEntries(
       Object.entries(edits).map(([k, v]) => [k, fields.find((f) => f.key === k)?.type === "number" ? (v === "" ? null : Number(v)) : v || null]),
     );
-    let r = await fetch(`/api/ai/proposals/${p.id}`, {
+    const r = await fetch(`/api/ai/proposals/${p.id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action, edits: editPayload, password: password || undefined }),
@@ -72,33 +103,12 @@ export function ProposalCard({ p: initial, onDone }: { p: Proposal; onDone?: () 
         }
       })
       .catch(() => ({ ok: false, message: "Couldn't reach the app — try again." }));
-    // The work happens in the background; wait for it to finish.
-    if (r.working) {
-      // Check every 2 seconds for up to 6 minutes.
-      for (let attempt = 0; attempt < 180; attempt++) {
-        await new Promise((res) => setTimeout(res, 2000));
-        const s = await fetch(`/api/ai/proposals/${p.id}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
-        if (!s) continue;
-        if (s.result?.needsPassword) {
-          r = { needsPassword: true, message: s.result.message };
-          break;
-        }
-        if (s.status !== "pending") {
-          r = s.status === "applied" ? { ...s.result, ok: true } : { ok: false, message: s.result?.message ?? "That didn't work." };
-          break;
-        }
-      }
-      if (r.working) r = { ok: false, message: "This is taking very long — check back in a minute (reload the page)." };
+    // The work happens in the background as a job; watch it live.
+    if (r.working && r.jobId) {
+      setJobId(r.jobId);
+      return;
     }
-    setBusy(false);
-    if (action === "cancel") return setP({ ...p, status: "cancelled" });
-    if (r.needsPassword) {
-      setNeedsPassword(true);
-      return setError(r.message);
-    }
-    if (!r.ok) return setError(r.message);
-    setP({ ...p, status: "applied", result: r });
-    onDone?.();
+    settle(r, action);
   }
 
   const done = p.status === "applied";
@@ -126,18 +136,41 @@ export function ProposalCard({ p: initial, onDone }: { p: Proposal; onDone?: () 
       {needsPassword && !done && (
         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="PDF password" className="input mt-2" autoComplete="off" />
       )}
+      {busy && jobId && (
+        <div className="mt-3 rounded-lg bg-slate-50 p-2.5">
+          <JobProgress job={job} fallback={p.kind === "statement_import" ? "Reading statement…" : "Saving…"} />
+        </div>
+      )}
       {error && <p className="mt-2 text-rose-700">{error}</p>}
 
       {done ? (
         <p className="mt-2 font-medium text-emerald-800">
           ✓ {p.result?.message ?? "Done."} {p.result?.link && <Link href={p.result.link} className="link">Open →</Link>}
+          {jobId && (
+            <button
+              type="button"
+              disabled={undo !== "idle"}
+              onClick={async () => {
+                setUndo("working");
+                const r = await undoChanges(jobId);
+                setUndo(r.message);
+                if (r.ok) {
+                  setP({ ...p, status: "cancelled" });
+                  onDone?.();
+                }
+              }}
+              className="ml-2 text-xs font-normal text-slate-500 underline hover:text-slate-800"
+            >
+              {undo === "idle" ? "Undo" : undo === "working" ? "Undoing…" : ""}
+            </button>
+          )}
         </p>
       ) : off ? (
-        <p className="mt-2 text-slate-500">{p.status === "cancelled" ? "Cancelled." : "Didn't work."}</p>
+        <p className="mt-2 text-slate-500">{undo !== "idle" && undo !== "working" ? undo : p.status === "cancelled" ? "Cancelled." : "Didn't work."}</p>
       ) : (
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" disabled={busy} onClick={() => act("confirm")} className="btn-primary px-3 py-1.5">
-            {busy ? (p.kind === "statement_import" ? "Reading statement…" : "Saving…") : needsPassword ? "Try with password" : "Confirm"}
+            {busy ? "Working…" : needsPassword ? "Try with password" : "Confirm"}
           </button>
           {fields.length > 0 && (
             <button type="button" disabled={busy} onClick={() => setEditing((v) => !v)} className="btn-secondary px-3 py-1.5">

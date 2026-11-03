@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { createStatement } from "@/app/actions/finance";
+import { JobProgress } from "@/components/job-progress";
 import { readStatement } from "@/lib/statement-client";
 import { createClient } from "@/lib/supabase/client";
+import { useJob } from "@/lib/use-job";
 
 type Account = { id: string; name: string; bank: string; hasPassword: boolean };
 type Result = { status: string; message: string; added?: number; duplicates?: number; review?: number; balanceOk?: boolean; issues?: string[] };
@@ -23,6 +25,8 @@ export function StatementDrop({ accounts, userId, aiReady }: { accounts: Account
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [over, setOver] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const job = useJob(jobId);
   const account = accounts.find((a) => a.id === accountId);
 
   if (!accounts.length)
@@ -34,11 +38,11 @@ export function StatementDrop({ accounts, userId, aiReady }: { accounts: Account
     );
 
   async function read(id: string) {
-    setBusy("Reading every row and checking the balances… (about a minute)");
-    const r: Result = await readStatement(id, password, (sec, progress) =>
-      setBusy(`${progress ? `${progress} · ` : "Reading every row and checking the balances · "}${sec}s — you can leave this page`),
-    );
+    setBusy("Starting…");
+    setJobId(null);
+    const r: Result = await readStatement(id, password, undefined, setJobId);
     setBusy(null);
+    setJobId(null);
     if (r.status === "needs_password") {
       setNeedPassword(true);
       setError(r.message);
@@ -101,7 +105,7 @@ export function StatementDrop({ accounts, userId, aiReady }: { accounts: Account
     >
       <input ref={input} type="file" accept="application/pdf,.pdf" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
       {busy ? (
-        <p className="py-3 text-sm text-slate-600"><span className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand-500 border-t-transparent align-middle" />{busy}</p>
+        <div className="py-2 text-left">{jobId ? <JobProgress job={job} fallback="Starting…" /> : <p className="text-sm text-slate-600"><span className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand-500 border-t-transparent align-middle" />{busy}</p>}</div>
       ) : file ? (
         <div className="space-y-2 text-left text-sm">
           <div className="truncate font-medium">📄 {file.name}</div>

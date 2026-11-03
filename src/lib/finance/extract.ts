@@ -76,7 +76,7 @@ Rules:
   - SIP, mutual funds, Zerodha, Groww, stocks, PPF, FD → "Investments". Bank interest → "Interest".
   - Card annual fees, SMS charges, GST on charges → "Bank fees & charges".
   - Ring lights, cameras, mics, props, editing software → "Creator work expenses".
-  - The owner also runs a business called Sajilo. Money in or out that mentions Sajilo, or is clearly for that business → "Sajilo income" / "Sajilo expenses" (only if those names are in the list). When unsure whether it's Sajilo or personal, use confidence below 0.6.
+  - The owner also runs a business called Sajilo (bank name "SAJILOSERVICESP" / Sajilo Services). Money from Sajilo marked salary → "Sajilo income"; other money from Sajilo (paying back food, ads, travel…) → "Sajilo reimbursements" with confidence 0.6; spending clearly for that business → "Sajilo expenses" (only use names that are in the list). When unsure whether it's Sajilo or personal, use confidence below 0.6.
   - UPI to a person's name with no clear purpose → "Uncategorized" with confidence below 0.5 (the owner will tell us).
 - confidence: 0.9+ only when the merchant makes it obvious.`;
 

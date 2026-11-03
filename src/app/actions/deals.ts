@@ -83,7 +83,7 @@ export async function moveDealToStage(dealId: string, stage: StageId) {
   const { supabase } = await requireUser();
   const { error } = await supabase.from("deals").update({ stage }).eq("id", dealId);
   if (error) throw new Error(error.message);
-  refreshAll();
+  return refreshAll();
 }
 
 export async function deleteDeal(dealId: string) {
@@ -132,4 +132,9 @@ export async function logFollowUp(dealId: string, _prev: ActionState, fd: FormDa
   }
   refreshAll();
   return { ok: true, message: "Follow-up logged." };
+}
+
+/** Same as moveDealToStage, for plain forms (which can't take a return value). */
+export async function moveDealToStageForm(dealId: string, stage: Parameters<typeof moveDealToStage>[1]): Promise<void> {
+  await moveDealToStage(dealId, stage);
 }

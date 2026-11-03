@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { deleteActivity } from "@/app/actions/activities";
-import { deleteDeal, moveDealToStage } from "@/app/actions/deals";
+import { deleteDeal, moveDealToStageForm } from "@/app/actions/deals";
 import { deleteDealFile } from "@/app/actions/files";
 import { ConfirmButton } from "@/components/forms";
 import { Badge, Card, Empty, PageHeader, StageBadge } from "@/components/ui";
@@ -63,7 +63,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
         actions={
           <>
             {nextStage && (
-              <form action={moveDealToStage.bind(null, deal.id, nextStage.id)}>
+              <form action={moveDealToStageForm.bind(null, deal.id, nextStage.id)}>
                 <button className="btn-primary">Move to {nextStage.label} →</button>
               </form>
             )}
@@ -82,7 +82,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
           const current = s.id === deal.stage;
           const passed = deal.stage !== "lost" && i < stageIndex && s.id !== "lost";
           return (
-            <form key={s.id} action={moveDealToStage.bind(null, deal.id, s.id)}>
+            <form key={s.id} action={moveDealToStageForm.bind(null, deal.id, s.id)}>
               <button
                 disabled={current}
                 className={`rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap ${

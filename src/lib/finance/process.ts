@@ -7,6 +7,7 @@ import { checkBalances } from "./checks";
 import { extractWithAi, type AiRow } from "./extract";
 import { AiError } from "./gemini";
 import { PdfPasswordError, extractPdfPages } from "./pdf-text";
+import type { JobCtx } from "@/lib/jobs";
 
 export type ProcessResult = {
   status: "done" | "needs_password" | "failed";
@@ -38,7 +39,10 @@ const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
  * Reads one uploaded statement end-to-end and saves its transactions.
  * Safe to run again: rows already saved (e.g. overlapping statements) are skipped.
  */
-export async function processStatement(supabase: DB, statementId: string, passwordOverride?: string): Promise<ProcessResult> {
+export async function processStatement(supabase: DB, statementId: string, passwordOverride?: string, job?: JobCtx): Promise<ProcessResult> {
+  const step = async (text: string) => {
+    await job?.step(text);
+  };
   const { data: st, error } = await supabase
     .from("statements")
     .select("*, account:bank_accounts(id, name, pdf_password)")
@@ -54,6 +58,7 @@ export async function processStatement(supabase: DB, statementId: string, passwo
   await supabase.from("statements").update({ status: "processing", error: null }).eq("id", statementId);
 
   // 1. Get the PDF and read its text.
+  await step("Opening the PDF");
   const { data: blob, error: dlError } = await supabase.storage.from("statements").download(st.file_path);
   if (dlError || !blob) return fail("failed", `Couldn't open the uploaded file: ${dlError?.message ?? "missing"}`);
   const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -73,6 +78,8 @@ export async function processStatement(supabase: DB, statementId: string, passwo
     await supabase.from("bank_accounts").update({ pdf_password: passwordOverride }).eq("id", st.account_id);
   }
 
+  await step(`Read the text of ${pages.length} page${pages.length === 1 ? "" : "s"}`);
+
   // 2. Ask the AI to pull out the rows.
   const categories = await ensureCategories(supabase);
   const catByName = new Map(categories.map((c) => [c.name.toLowerCase(), c]));
@@ -82,6 +89,7 @@ export async function processStatement(supabase: DB, statementId: string, passwo
   // error column only while reading; it's cleared when the statement finishes.
   const progress = async (done: number, total: number) => {
     await supabase.from("statements").update({ error: `progress: Read part ${done} of ${total}` }).eq("id", statementId);
+    await step(`AI read part ${done} of ${total}`);
   };
   try {
     ex =
@@ -229,6 +237,8 @@ export async function processStatement(supabase: DB, statementId: string, passwo
       dedupe_key: key,
     };
   });
+
+  await step(`Balances checked${check.breaks.length ? ` (${check.breaks.length} row${check.breaks.length === 1 ? "" : "s"} don't add up)` : " ✓"} — saving ${toInsert.length} new transaction${toInsert.length === 1 ? "" : "s"}${fresh.length < keyed.length ? `, ${keyed.length - fresh.length} already saved` : ""}`);
 
   // 6. Save.
   let inserted: { id: string; dedupe_key: string | null; category_id: string | null; category_source: string; category_reason: string | null }[] = [];

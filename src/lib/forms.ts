@@ -49,7 +49,7 @@ export function oneOf<T extends string>(fd: FormData, key: string, allowed: read
 /** An error whose message is safe to show to the user. */
 export class FormError extends Error {}
 
-export type ActionState = { error?: string; ok?: boolean; message?: string } | undefined;
+export type ActionState = { error?: string; ok?: boolean; message?: string; groupId?: string } | undefined;
 
 export function toActionError(e: unknown): ActionState {
   if (e instanceof FormError) return { error: e.message };

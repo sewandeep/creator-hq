@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Tap, TapRow } from "@/components/tap";
 import { followedUp, invoiceAndSend } from "@/app/actions/quick";
 import { markDealPaid, markInvoicePaid, removeContent } from "@/app/actions/work";
 import { moveDealToStage } from "@/app/actions/deals";
@@ -33,29 +34,29 @@ export async function DealPanel({ id, closeHref }: { id: string; closeHref: stri
   if (["lead", "contacted", "negotiating"].includes(stage)) {
     next = (
       <Step title="Still talking" text={deal.next_follow_up ? `Next follow-up ${relativeDay(deal.next_follow_up, today).toLowerCase()}.` : "No follow-up reminder set."}>
-        <form action={followedUp.bind(null, id, 3)}><button className="btn-secondary px-3 py-1.5 text-sm">Followed up ✓ (remind in 3 days)</button></form>
-        <form action={moveDealToStage.bind(null, id, "confirmed")}><button className="btn-primary px-3 py-1.5 text-sm">They said yes →</button></form>
-        <form action={moveDealToStage.bind(null, id, "lost")}><button className="btn-ghost px-3 py-1.5 text-sm text-slate-500">Didn&apos;t happen</button></form>
+        <Tap action={followedUp.bind(null, id, 3)} className="btn-secondary px-3 py-1.5 text-sm" hideRow saved="Follow-up logged">Followed up ✓ (remind in 3 days)</Tap>
+        <Tap action={moveDealToStage.bind(null, id, "confirmed")} className="btn-primary px-3 py-1.5 text-sm" done="✓" saved="Moved">They said yes →</Tap>
+        <Tap action={moveDealToStage.bind(null, id, "lost")} className="btn-ghost px-3 py-1.5 text-sm text-slate-500" done="✓" saved="Moved">Didn&apos;t happen</Tap>
       </Step>
     );
   } else if (["confirmed", "in_progress"].includes(stage)) {
     next = (
       <Step title="Make the content" text={items.length ? `${items.filter((d) => d.status === "posted").length} of ${items.length} posted. Tap “Mark posted” on each one when it goes live.` : "Add what you need to make below (e.g. “1 reel”)."}>
-        {allPosted && <form action={moveDealToStage.bind(null, id, "posted")}><button className="btn-primary px-3 py-1.5 text-sm">All posted →</button></form>}
+        {allPosted && <Tap action={moveDealToStage.bind(null, id, "posted")} className="btn-primary px-3 py-1.5 text-sm" done="✓" saved="Moved">All posted →</Tap>}
       </Step>
     );
   } else if (stage === "posted" && !inv) {
     next = (
       <Step title="Get paid" text={deal.amount ? `Send the invoice for ${rupees(deal.amount)} — it's filled in for you; you just check and send.` : "Add the fee above first, then send the invoice."} tone="brand">
-        {deal.amount ? <form action={invoiceAndSend.bind(null, id)}><button className="btn-primary px-3 py-1.5 text-sm">Create & send invoice</button></form> : null}
-        <form action={markDealPaid.bind(null, id)}><button className="btn-ghost px-3 py-1.5 text-sm">Already paid</button></form>
+        {deal.amount ? <Tap action={invoiceAndSend.bind(null, id)} className="btn-primary px-3 py-1.5 text-sm" done="Opening…" saved="">Create & send invoice</Tap> : null}
+        <Tap action={markDealPaid.bind(null, id)} className="btn-ghost px-3 py-1.5 text-sm" done="Paid ✓" saved="Marked as paid">Already paid</Tap>
       </Step>
     );
   } else if (inv && balance > 0.5 && stage !== "paid") {
     const overdue = isOverdue(inv, today);
     next = (
       <Step title={overdue ? "Payment is late" : "Waiting for payment"} text={`${rupees(balance)} due on ${inv.invoice_number}${inv.due_date ? ` · ${relativeDay(inv.due_date, today).toLowerCase()}` : ""}.`} tone={overdue ? "red" : "brand"}>
-        <form action={markInvoicePaid.bind(null, inv.id)}><button className="btn-primary px-3 py-1.5 text-sm">Got paid ✓</button></form>
+        <Tap action={markInvoicePaid.bind(null, inv.id)} className="btn-primary px-3 py-1.5 text-sm" done="Paid ✓" saved="Marked as paid">Got paid ✓</Tap>
         {inv.status === "draft" ? (
           <Link href={`/email/compose?invoice=${inv.id}&template=${encodeURIComponent("Send invoice")}`} className="btn-secondary px-3 py-1.5 text-sm">Send invoice</Link>
         ) : (
@@ -69,7 +70,7 @@ export async function DealPanel({ id, closeHref }: { id: string; closeHref: stri
   } else if (stage === "lost") {
     next = (
       <Step title="Didn't happen" text={deal.lost_reason ?? "Marked as lost."}>
-        <form action={moveDealToStage.bind(null, id, "negotiating")}><button className="btn-secondary px-3 py-1.5 text-sm">Reopen</button></form>
+        <Tap action={moveDealToStage.bind(null, id, "negotiating")} className="btn-secondary px-3 py-1.5 text-sm" done="✓" saved="Moved">Reopen</Tap>
       </Step>
     );
   }
@@ -108,7 +109,7 @@ export async function DealPanel({ id, closeHref }: { id: string; closeHref: stri
         {items.length > 0 && (
           <ul className="mb-3 divide-y divide-slate-100 rounded-xl ring-1 ring-slate-200">
             {items.map((d) => (
-              <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm">
+              <TapRow key={d.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm">
                 <span className="min-w-0">
                   <span className="font-medium">{d.quantity > 1 ? `${d.quantity}× ` : ""}{d.type}</span>
                   {d.due_date && d.status !== "posted" && <span className={`ml-2 text-xs ${d.due_date < today ? "text-rose-600" : "text-slate-500"}`}>due {fmtDate(d.due_date, true)}</span>}
@@ -116,9 +117,9 @@ export async function DealPanel({ id, closeHref }: { id: string; closeHref: stri
                 </span>
                 <span className="flex items-center gap-2">
                   <PostedButton deliverableId={d.id} posted={d.status === "posted"} />
-                  <form action={removeContent.bind(null, d.id)}><button className="text-xs text-slate-400 hover:text-rose-600" aria-label="Remove">✕</button></form>
+                  <Tap action={removeContent.bind(null, d.id)} className="text-xs text-slate-400 hover:text-rose-600" hideRow saved="Removed">✕</Tap>
                 </span>
-              </li>
+              </TapRow>
             ))}
           </ul>
         )}

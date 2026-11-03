@@ -9,7 +9,7 @@ import { quickAddCore } from "@/lib/finance/entries";
 import { AiError } from "@/lib/finance/gemini";
 import { todayIST } from "@/lib/format";
 import { FormError } from "@/lib/forms";
-import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
+import { createJob, runJob } from "@/lib/jobs";
 
 // The AI may look things up several times before answering.
 export const maxDuration = 300;
@@ -35,17 +35,25 @@ async function handle(req: Request) {
     context = null;
   }
   const files: InFile[] = [];
+  // Files the browser already put in storage (no size limit from the server).
+  let uploaded: { path: string; name: string; mime: string }[] = [];
+  try {
+    uploaded = form.get("uploaded") ? (JSON.parse(String(form.get("uploaded"))) as typeof uploaded) : [];
+  } catch {
+    uploaded = [];
+  }
+  uploaded = uploaded.filter((u) => typeof u.path === "string" && u.path.startsWith(`${userId}/`)).slice(0, 10);
   for (const f of form.getAll("files")) {
     if (f instanceof File && f.size > 0) {
       if (f.size > 15 * 1024 * 1024) return NextResponse.json({ error: `${f.name} is over 15 MB.` }, { status: 400 });
       files.push({ name: f.name || "file", mime: f.type || "application/octet-stream", bytes: new Uint8Array(await f.arrayBuffer()) });
     }
   }
-  if (!text.trim() && !files.length) return NextResponse.json({ error: "Type something or attach a file." }, { status: 400 });
+  if (!text.trim() && !files.length && !uploaded.length) return NextResponse.json({ error: "Type something or attach a file." }, { status: 400 });
 
   try {
     // "450 cab" style notes are saved straight away — no AI needed.
-    if (!files.length && isQuickEntry(text, todayIST())) {
+    if (!files.length && !uploaded.length && isQuickEntry(text, todayIST())) {
       const r = await quickAddCore(supabase, text, "manual");
       const now = Date.now();
       await supabase.from("ai_messages").insert([
@@ -61,23 +69,43 @@ async function handle(req: Request) {
     const { data: rows, error } = await supabase
       .from("ai_messages")
       .insert([
-        { channel: "app", role: "user", content: text.trim() || "(sent a file)", attachments: files.map((f) => ({ name: f.name })), created_at: new Date(now).toISOString() },
+        { channel: "app", role: "user", content: text.trim() || (uploaded.some((u) => u.mime.startsWith("audio/")) ? "🎤 Voice note" : "(sent a file)"), attachments: [...files, ...uploaded].map((f) => ({ name: f.name })), created_at: new Date(now).toISOString() },
         { channel: "app", role: "assistant", content: "", attachments: [{ pending: true }], created_at: new Date(now + 1).toISOString() },
       ])
       .select("id, role");
     if (error || !rows) throw new Error(error?.message ?? "Couldn't save your message.");
     const saved = { userMessageId: rows.find((r) => r.role === "user")!.id, replyMessageId: rows.find((r) => r.role === "assistant")!.id };
-    const db = isAdminConfigured() ? createAdminClient(userId) : supabase;
+    const names = [...files, ...uploaded].map((f) => f.name);
+    const title = text.trim() ? text.trim().slice(0, 80) : uploaded.some((u) => u.mime.startsWith("audio/")) ? "Voice note" : `File: ${names.join(", ")}`;
+    const jobId = await createJob(supabase, { kind: "chat", title, refId: saved.replyMessageId });
 
-    after(async () => {
-      try {
-        await runAssistant(db, userId, { text, files, channel: "app", saved, context });
-      } catch (e) {
-        const message = e instanceof AiError || e instanceof FormError ? e.message : `Something went wrong: ${e instanceof Error ? e.message : String(e)}`;
-        await db.from("ai_messages").update({ content: `⚠️ ${message}`, attachments: [] }).eq("id", saved.replyMessageId);
-      }
-    });
-    return NextResponse.json({ pending: saved.replyMessageId });
+    after(() =>
+      runJob(
+        supabase,
+        userId,
+        jobId,
+        async (job) => {
+          // Fetch anything the browser uploaded.
+          for (const u of uploaded) {
+            await job.step(`Opening ${u.name}`);
+            const { data: blob, error: dlError } = await job.db.storage.from("inbox").download(u.path);
+            if (dlError || !blob) throw new Error(`Couldn't open ${u.name}: ${dlError?.message ?? "missing"}`);
+            files.push({ name: u.name, mime: u.mime, bytes: new Uint8Array(await blob.arrayBuffer()), path: u.path });
+          }
+          const r = await runAssistant(job.db, userId, { text, files, channel: "app", saved, context, job });
+          return { summary: r.reply.slice(0, 300), result: { proposals: r.proposals.map((p) => p.id) } };
+        },
+        {
+          onFail: async (message, cancelled, db) => {
+            await db
+              .from("ai_messages")
+              .update({ content: cancelled ? "⏹ Stopped — nothing was saved." : `⚠️ ${message}`, attachments: [] })
+              .eq("id", saved.replyMessageId);
+          },
+        },
+      ),
+    );
+    return NextResponse.json({ pending: saved.replyMessageId, jobId });
   } catch (e) {
     const message = e instanceof AiError || e instanceof FormError ? e.message : `Something went wrong: ${e instanceof Error ? e.message : String(e)}`;
     return NextResponse.json({ error: message }, { status: 200 });

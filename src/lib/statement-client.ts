@@ -11,7 +11,13 @@ export type StatementResult = {
   issues?: string[];
 };
 
-export async function readStatement(id: string, password?: string, onWaiting?: (seconds: number, progress: string | null) => void): Promise<StatementResult> {
+export async function readStatement(
+  id: string,
+  password?: string,
+  onWaiting?: (seconds: number, progress: string | null) => void,
+  /** Called with the background job's id, so the page can show live steps + Stop. */
+  onJob?: (jobId: string) => void,
+): Promise<StatementResult> {
   const start = await fetch(`/api/statements/${id}/process`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -21,12 +27,13 @@ export async function readStatement(id: string, password?: string, onWaiting?: (
     .catch(() => null);
   if (!start) return { status: "failed", message: "Couldn't reach the app — check your connection and try again." };
   if (start.status !== "processing") return start as StatementResult;
+  if (start.jobId) onJob?.(start.jobId);
 
   // Up to ~6 minutes; a missed check (phone asleep, network blip) just tries again.
-  for (let i = 0; i < 120; i++) {
-    await new Promise((r) => setTimeout(r, 3000));
+  for (let i = 0; i < 180; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
     const s = await fetch(`/api/statements/${id}/status`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-    onWaiting?.((i + 1) * 3, s?.progress ?? null);
+    onWaiting?.((i + 1) * 2, s?.progress ?? null);
     if (s && s.status !== "processing") return s as StatementResult;
   }
   return { status: "failed", message: "This is taking unusually long. It may still finish — check the Money page in a few minutes." };

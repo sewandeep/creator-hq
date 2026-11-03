@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Tap } from "@/components/tap";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { deleteEntry, dismissInvoiceSuggestion, recordAsInvoicePayment, saveTxnDetails, unlinkEntry } from "@/app/actions/finance";
@@ -72,8 +73,8 @@ export default async function TxnPage({ params }: { params: Promise<{ id: string
               This looks like the payment for <Link href={`/invoices/${t.invoice.id}`} className="link">{t.invoice.invoice_number}</Link> from {t.invoice.brand?.name}.
             </p>
             <div className="mt-3 flex gap-2">
-              <form action={recordAsInvoicePayment.bind(null, t.id, t.invoice.id)}><button className="btn-primary">Record payment on the invoice</button></form>
-              <form action={dismissInvoiceSuggestion.bind(null, t.id)}><button className="btn-ghost">Not this invoice</button></form>
+              <Tap action={recordAsInvoicePayment.bind(null, t.id, t.invoice.id)} className="btn-primary" done="Recorded ✓" saved="Payment recorded">Record payment on the invoice</Tap>
+              <Tap action={dismissInvoiceSuggestion.bind(null, t.id)} className="btn-ghost" done="OK" saved="">Not this invoice</Tap>
             </div>
           </Card>
         )}

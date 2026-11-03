@@ -3,7 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { clearChat } from "@/app/actions/ai";
+import { JobProgress } from "@/components/job-progress";
 import { Md } from "@/components/md";
+import { createClient } from "@/lib/supabase/client";
+import { useJob } from "@/lib/use-job";
 import { ProposalCard, type Proposal } from "./proposal-card";
 
 export type ChatMessage = {
@@ -13,10 +16,30 @@ export type ChatMessage = {
   attachments: { name: string; kind?: string }[];
   proposals: Proposal[];
   pending?: boolean;
+  /** The background job working on this answer (live steps + Stop). */
+  jobId?: string | null;
 };
 export type ChatContext = { type: "deal" | "brand" | "invoice" | "transaction" | "page"; id?: string; path?: string } | null;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Puts files straight into private storage, so size limits on the app server don't apply. */
+async function uploadToInbox(files: File[]) {
+  const supabase = createClient();
+  const { data } = await supabase.auth.getSession();
+  const userId = data.session?.user.id;
+  if (!userId) throw new Error("You're logged out — refresh the page.");
+  const out: { path: string; name: string; mime: string }[] = [];
+  for (const f of files) {
+    const safe = f.name.replace(/[^\w.\- ]+/g, "_").slice(-100) || "file";
+    const path = `${userId}/${crypto.randomUUID()}-${safe}`;
+    const mime = (f.type || "application/octet-stream").split(";")[0];
+    const { error } = await supabase.storage.from("inbox").upload(path, f, { contentType: mime });
+    if (error) throw new Error(`Couldn't upload ${f.name}: ${error.message}`);
+    out.push({ path, name: f.name, mime });
+  }
+  return out;
+}
 
 /** Shrinks big photos so uploads stay fast. */
 async function shrinkImage(file: File): Promise<File> {
@@ -83,12 +106,22 @@ export function Chat({
     setSending(true);
     setText("");
     setFiles([]);
-    setMessages((m) => [...m, { id: `u${Date.now()}`, role: "user", content: body.trim() || "(sent a file)", attachments: attach.map((f) => ({ name: f.name })), proposals: [] }]);
+    const isVoice = attach.length === 1 && attach[0].type.startsWith("audio/") && !body.trim();
+    setMessages((m) => [...m, { id: `u${Date.now()}`, role: "user", content: body.trim() || (isVoice ? "🎤 Voice note" : "(sent a file)"), attachments: attach.map((f) => ({ name: f.name })), proposals: [] }]);
     const fd = new FormData();
     fd.set("text", body);
     if (context) fd.set("context", JSON.stringify(context));
-    for (const f of attach) fd.append("files", await shrinkImage(f));
-    const r = await fetch("/api/ai/ask", { method: "POST", body: fd })
+    let uploadError: string | null = null;
+    if (attach.length) {
+      try {
+        fd.set("uploaded", JSON.stringify(await uploadToInbox(await Promise.all(attach.map(shrinkImage)))));
+      } catch (e) {
+        uploadError = e instanceof Error ? e.message : String(e);
+      }
+    }
+    const r = uploadError
+      ? { error: uploadError }
+      : await fetch("/api/ai/ask", { method: "POST", body: fd })
       .then(async (x) => {
         const raw = await x.text();
         try {
@@ -99,7 +132,7 @@ export function Chat({
       })
       .catch((e) => ({ error: `Couldn't send your message (${e instanceof Error ? e.message : "network error"}). Check your connection and try again.` }));
     if (r.pending) {
-      setMessages((m) => [...m, { id: r.pending, role: "assistant", content: "", attachments: [], proposals: [], pending: true }]);
+      setMessages((m) => [...m, { id: r.pending, role: "assistant", content: "", attachments: [], proposals: [], pending: true, jobId: r.jobId ?? null }]);
     } else {
       setMessages((m) => [...m, { id: `a${Date.now()}`, role: "assistant", content: r.error ? `⚠️ ${r.error}` : r.reply, attachments: [], proposals: r.proposals ?? [] }]);
       if (r.quick) router.refresh();
@@ -127,7 +160,7 @@ export function Chat({
   }, [queued, loaded]);
 
   // Pick up answers the AI is still working on (also after a reload).
-  const waiting = messages.filter((m) => m.pending).map((m) => m.id).join(",");
+  const waiting = messages.filter((m) => m.pending && !m.jobId).map((m) => m.id).join(",");
   useEffect(() => {
     if (!waiting) return;
     let stop = false;
@@ -175,6 +208,13 @@ export function Chat({
     }
   }
 
+  /** A job finished: load the saved answer. */
+  async function loadReply(id: string) {
+    const r = await fetch(`/api/ai/messages/${id}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+    if (!r || r.pending) return;
+    setMessages((m) => m.map((x) => (x.id === id ? { ...x, content: r.content, proposals: r.proposals ?? [], pending: false } : x)));
+  }
+
   const panel = variant === "panel";
   return (
     <div className={panel ? "flex h-full min-h-0 flex-col" : "flex min-h-[calc(100dvh-12rem)] flex-col"}>
@@ -193,13 +233,11 @@ export function Chat({
               {m.attachments.length > 0 && <div className={`mb-1 text-xs ${m.role === "user" ? "text-brand-100" : "text-slate-500"}`}>📎 {m.attachments.map((a) => a.name).join(", ")}</div>}
               {m.role === "user" ? (
                 <p className="text-sm whitespace-pre-wrap">{m.content}</p>
+              ) : m.pending && m.jobId ? (
+                <PendingReply jobId={m.jobId} onFinished={() => void loadReply(m.id)} />
               ) : m.pending ? (
                 <p className="flex items-center gap-2 text-sm text-slate-500">
-                  <span className="inline-flex gap-1">
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-400" />
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-400 [animation-delay:120ms]" />
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-400 [animation-delay:240ms]" />
-                  </span>
+                  <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
                   Thinking…
                 </p>
               ) : (
@@ -274,4 +312,15 @@ export function Chat({
       </div>
     </div>
   );
+}
+
+/** Shows the assistant working live; when it's finished, the chat loads the answer. */
+function PendingReply({ jobId, onFinished }: { jobId: string; onFinished: () => void }) {
+  const job = useJob(jobId);
+  const done = job && job.status !== "running";
+  useEffect(() => {
+    if (done) onFinished();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [done]);
+  return <JobProgress job={job} fallback="Starting…" />;
 }

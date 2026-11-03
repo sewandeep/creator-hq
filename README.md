@@ -52,6 +52,19 @@ Your private workspace for creator deals and (soon) personal finances.
   - **Mark posted**, **Create & send invoice** and **Got paid ✓**
   - **+ New deal** by telling the AI, or with 4 fields
 
+**Safety net & instant app:**
+- Every AI answer, statement read, confirmed change, Telegram message and morning check is a tracked task:
+  - you watch its steps live ("Reading part 2 of 5…")
+  - you can **Stop** it
+  - it has a time limit, so nothing hangs forever
+- **Activity** (under More, or in the AI panel) lists everything that happened, including your own edits:
+  - what changed, what failed and why
+  - **Undo** puts back exactly what that tap, task or statement changed
+- Taps update the screen at once and save in the background. A small "Saved · Undo" message confirms each one; if a save fails, the screen goes back and tells you why.
+- Main tabs are loaded ahead, so switching between Today, Work, Money and Reports is instant.
+- Voice notes are turned into text by Groq (free), so iPhone recordings work.
+- Sajilo money has its own categories (income, expenses, reimbursements) and is kept out of your personal totals.
+
 ---
 
 ## One-time setup
@@ -67,6 +80,7 @@ Your private workspace for creator deals and (soon) personal finances.
    - Phase 3: `20261102000000_phase3_finance.sql`
    - Phase 4: `20261103000000_phase4_telegram.sql`
    - Phase 5: `20261104000000_phase5_assistant.sql`
+   - Safety net: `20261105000000_safety_net.sql`
 
    The app's **Setup check** page (`/setup`) shows which ones are still missing.
 
@@ -111,6 +125,8 @@ Without this, the email screen still works: it opens Gmail with everything fille
 2. In Vercel, add the environment variable `GEMINI_API_KEY` with that key, then **Redeploy**.
 
 The app uses `gemini-3.8-flash` and falls back to `gemini-3.5-flash-lite` (which has a bigger free daily limit). To pin a model, set `GEMINI_MODEL`.
+
+**Voice notes (free):** at **console.groq.com**, go to **API Keys**, then **Create**, and add the key in Vercel as `GROQ_API_KEY`.
 
 ### 6. Telegram bot & 9 AM reminders
 1. In Telegram, message **@BotFather**, send `/newbot`, pick a name and a username ending in `bot`, and copy the token.

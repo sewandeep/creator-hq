@@ -14,14 +14,14 @@ export async function followedUp(dealId: string, inDays: number) {
   const next = inDays > 0 ? addDays(todayIST(), inDays) : null;
   const { data: deal } = await supabase.from("deals").update({ next_follow_up: next }).eq("id", dealId).select("brand_id").single();
   await supabase.from("activities").insert({ deal_id: dealId, brand_id: deal?.brand_id ?? null, kind: "follow_up", body: `Followed up${next ? ` · next follow-up ${fmtDate(next)}` : " · no further follow-up"}` });
-  refreshAll();
+  return refreshAll();
 }
 
 /** Push a follow-up reminder to later without logging a follow-up. */
 export async function snoozeFollowUp(dealId: string, inDays: number) {
   const { supabase } = await requireUser();
   await supabase.from("deals").update({ next_follow_up: addDays(todayIST(), inDays) }).eq("id", dealId);
-  refreshAll();
+  return refreshAll();
 }
 
 /** Creates the invoice from the deal and opens the email with it attached — check and send. */

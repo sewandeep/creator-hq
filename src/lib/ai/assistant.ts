@@ -3,6 +3,7 @@ import type { DB } from "@/app/actions/helpers";
 import { callGemini, type GeminiContent, type GeminiPart } from "@/lib/finance/gemini";
 import { fmtDate, todayIST } from "@/lib/format";
 import { fyLabel, fyOf } from "@/lib/fy";
+import type { JobCtx } from "@/lib/jobs";
 import type { Json } from "@/lib/supabase/database.types";
 import { describeContext, type PageContext } from "./context";
 import type { InFile } from "./files";
@@ -48,10 +49,16 @@ export async function runAssistant(
     context?: PageContext | null;
     /** Already-saved chat rows for this turn (the app saves them up front). */
     saved?: { userMessageId: string; replyMessageId: string };
+    /** Live progress + Stop button (when run as a job). */
+    job?: JobCtx;
   },
 ): Promise<AssistantReply> {
+  const step = async (text: string) => {
+    await input.job?.step(text);
+  };
   const { data: profile } = await db.from("profile").select("display_name, legal_name").eq("user_id", userId).maybeSingle();
   // File reading (PDF, Excel) is only loaded when a file is actually sent.
+  if (input.files?.length) await step(input.files.length === 1 ? `Opening ${input.files[0].name}` : `Opening ${input.files.length} files`);
   const prepared = input.files?.length
     ? await (await import("./files")).prepareFiles(db, userId, input.files)
     : { refs: [] as import("./files").FileRef[], parts: [] as GeminiPart[] };
@@ -81,6 +88,7 @@ export async function runAssistant(
   let reply = "";
   let model = "";
   for (let round = 0; round < 7; round++) {
+    await step(round === 0 ? "Thinking…" : "Thinking about what it found…");
     const res = await callGemini({
       systemInstruction: { parts: [{ text: systemPrompt(profile?.display_name || profile?.legal_name || "") }] },
       contents,
@@ -102,12 +110,15 @@ export async function runAssistant(
     contents.push({ role: "model", parts: content.parts });
     const responses: GeminiPart[] = [];
     for (const p of calls) {
+      await step(toolLabel(p.functionCall!.name, p.functionCall!.args ?? {}));
       const out = await runTool(p.functionCall!.name, p.functionCall!.args ?? {}, ctx);
       responses.push({ functionResponse: { ...(p.functionCall!.id ? { id: p.functionCall!.id } : {}), name: p.functionCall!.name, response: { result: out } } });
     }
     contents.push({ role: "user", parts: responses });
   }
   if (!reply) reply = ctx.proposals.length ? "I've prepared that below — check it and tap Confirm." : "Sorry, that took too many steps. Could you ask more specifically?";
+
+  await step(ctx.proposals.length ? `Prepared ${ctx.proposals.length === 1 ? "a change" : `${ctx.proposals.length} changes`} for you to confirm` : "Writing the answer");
 
   // Save the exchange (not for automatic rundowns' prompt).
   if (input.saved) {
@@ -130,6 +141,35 @@ export async function runAssistant(
   }
   await db.from("ai_messages").insert({ channel: input.channel, role: "assistant", content: reply, proposal_ids: ctx.proposals.map((p) => p.id) });
   return { reply, proposals: ctx.proposals, model };
+}
+
+/** What each tool call looks like in the live progress list. */
+function toolLabel(name: string, args: Record<string, unknown>) {
+  const a = (k: string) => (typeof args[k] === "string" ? (args[k] as string) : "");
+  const range = a("from") && a("to") ? ` (${a("from")} → ${a("to")})` : a("month") ? ` for ${a("month")}` : "";
+  const labels: Record<string, string> = {
+    get_money_summary: `Adding up your money${range}`,
+    search_transactions: `Searching transactions${a("text") ? ` for "${a("text")}"` : ""}${range}`,
+    list_deals: "Looking at your deals",
+    brand_overview: `Looking up ${a("brand") || "the brand"}`,
+    list_invoices: "Checking invoices",
+    get_earnings: `Adding up earnings${range}`,
+    get_lending: "Checking who owes you",
+    get_tds: "Checking TDS",
+    get_upcoming: "Checking what's coming up",
+    get_rate_stats: "Looking at your rates",
+    list_categories: "Reading your categories",
+    list_bank_accounts: "Reading your bank accounts",
+    propose_new_deal: "Preparing the new deal",
+    propose_deal_update: "Preparing the deal update",
+    propose_entries: "Preparing the entries",
+    propose_recategorize: "Preparing the category changes",
+    propose_invoice_draft: "Preparing the invoice",
+    propose_statement_import: "Preparing the statement import",
+    propose_past_work_import: "Preparing the import",
+    propose_attach_to_deal: "Preparing to attach the file",
+  };
+  return labels[name] ?? "Looking things up";
 }
 
 export const RUNDOWN_PROMPT =

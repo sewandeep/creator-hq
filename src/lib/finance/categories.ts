@@ -40,6 +40,7 @@ export const DEFAULT_CATEGORIES: { name: string; kind: CategoryKind; emoji: stri
   { name: "Credit card bill", kind: "transfer", emoji: "💳" },
   { name: "Sajilo income", kind: "income", emoji: "🏢" },
   { name: "Sajilo expenses", kind: "expense", emoji: "🏢" },
+  { name: "Sajilo reimbursements", kind: "income", emoji: "🏢" },
   { name: "Lent money", kind: "lending", emoji: "🤝" },
   { name: "Money returned", kind: "lending", emoji: "🙌" },
 ];
@@ -56,4 +57,4 @@ export const KIND_LABEL: Record<CategoryKind, string> = {
 export const isSajilo = (name: string | null | undefined) => /^sajilo\b/i.test((name ?? "").trim());
 
 /** Categories added after launch: created once for accounts that already had their starter set. */
-export const ADDED_LATER = ["Sajilo income", "Sajilo expenses"];
+export const ADDED_LATER = ["Sajilo income", "Sajilo expenses", "Sajilo reimbursements"];
