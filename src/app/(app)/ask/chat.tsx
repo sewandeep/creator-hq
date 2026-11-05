@@ -6,7 +6,7 @@ import { clearChat } from "@/app/actions/ai";
 import { JobProgress } from "@/components/job-progress";
 import { Md } from "@/components/md";
 import { createClient } from "@/lib/supabase/client";
-import { useJob } from "@/lib/use-job";
+import { stopJob, useJob } from "@/lib/use-job";
 import { ProposalCard, type Proposal } from "./proposal-card";
 
 export type ChatMessage = {
@@ -314,7 +314,7 @@ export function Chat({
   );
 }
 
-/** Shows the assistant working live; when it's finished, the chat loads the answer. */
+/** Shows the assistant working live — steps, then the answer as it's written. */
 function PendingReply({ jobId, onFinished }: { jobId: string; onFinished: () => void }) {
   const job = useJob(jobId);
   const done = job && job.status !== "running";
@@ -322,5 +322,18 @@ function PendingReply({ jobId, onFinished }: { jobId: string; onFinished: () => 
     if (done) onFinished();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [done]);
-  return <JobProgress job={job} fallback="Starting…" />;
+  const streamed = job?.status === "running" ? (job.summary ?? "").trim() : "";
+  if (streamed)
+    return (
+      <div>
+        <Md text={streamed} />
+        <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse rounded-sm bg-brand-400 align-middle" />
+        <div className="mt-1">
+          <button type="button" onClick={() => void stopJob(jobId)} className="rounded-full px-2 py-0.5 text-xs text-slate-500 ring-1 ring-slate-200 hover:text-rose-600">
+            Stop
+          </button>
+        </div>
+      </div>
+    );
+  return <JobProgress job={job} fallback="Starting…" compact />;
 }

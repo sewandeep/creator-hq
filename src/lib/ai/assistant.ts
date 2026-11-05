@@ -1,11 +1,14 @@
 import "server-only";
 import type { DB } from "@/app/actions/helpers";
-import { callGemini, type GeminiContent, type GeminiPart } from "@/lib/finance/gemini";
+import { AiError, callGemini, type GeminiContent, type GeminiPart } from "@/lib/finance/gemini";
+import { isGroqConfigured } from "@/lib/groq";
 import { fmtDate, todayIST } from "@/lib/format";
 import { fyLabel, fyOf } from "@/lib/fy";
 import type { JobCtx } from "@/lib/jobs";
 import type { Json } from "@/lib/supabase/database.types";
 import { describeContext, type PageContext } from "./context";
+import { GROQ_CHAT_MODELS, GroqUnavailable, groqTurn, toOpenAiTools, type ChatMsg } from "./groq-chat";
+import { buildSnapshot } from "./snapshot";
 import type { InFile } from "./files";
 import { TOOL_DECLARATIONS, runTool, type ToolContext } from "./tools";
 
@@ -85,12 +88,35 @@ export async function runAssistant(
   contents.push({ role: "user", parts: userParts });
 
   const ctx: ToolContext = { db, userId, files: prepared.refs, channel: input.channel, proposals: [] };
+  const snapshot = await buildSnapshot(db, userId).catch(() => "");
+  const system = `${systemPrompt(profile?.display_name || profile?.legal_name || "")}${snapshot ? `\n\nWhere things stand right now (answer from this directly when it's enough; use tools for anything more detailed):\n${snapshot}` : ""}`;
   let reply = "";
   let model = "";
-  for (let round = 0; round < 7; round++) {
+
+  // Fast path: Groq, streamed. Photos, scanned PDFs and audio without a
+  // transcript need Gemini (it can see/hear), so those go straight there.
+  const textOnly = prepared.parts.every((p) => !p.inlineData);
+  let answered = false;
+  if (isGroqConfigured() && textOnly) {
+    try {
+      const userText = userParts.map((p) => p.text ?? "").filter(Boolean).join("\n\n");
+      const recent = (history ?? []).slice(0, 6).reverse().map((m): ChatMsg => ({ role: m.role === "user" ? "user" : "assistant", content: m.content.slice(0, 800) }));
+      const r = await groqAssistant({ system, recent, userText, ctx, step, partial: (t) => input.job?.partial?.(t) });
+      reply = r.reply;
+      model = r.model;
+      answered = true;
+    } catch (e) {
+      if (!(e instanceof GroqUnavailable)) throw e;
+      console.warn("groq unavailable, using gemini", e.message);
+      await step("The fast AI is busy — switching to Gemini");
+      input.job?.partial?.("");
+    }
+  }
+
+  for (let round = 0; !answered && round < 7; round++) {
     await step(round === 0 ? "Thinking…" : "Thinking about what it found…");
     const res = await callGemini({
-      systemInstruction: { parts: [{ text: systemPrompt(profile?.display_name || profile?.legal_name || "") }] },
+      systemInstruction: { parts: [{ text: system }] },
       contents,
       tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
       generationConfig: { temperature: 0.3 },
@@ -141,6 +167,50 @@ export async function runAssistant(
   }
   await db.from("ai_messages").insert({ channel: input.channel, role: "assistant", content: reply, proposal_ids: ctx.proposals.map((p) => p.id) });
   return { reply, proposals: ctx.proposals, model };
+}
+
+/** The assistant loop on Groq: streamed text, tools, up to 6 rounds. */
+async function groqAssistant(o: {
+  system: string;
+  recent: ChatMsg[];
+  userText: string;
+  ctx: ToolContext;
+  step: (text: string) => Promise<void>;
+  partial: (text: string) => void;
+}): Promise<{ reply: string; model: string }> {
+  const tools = toOpenAiTools(TOOL_DECLARATIONS);
+  let last: unknown = null;
+  for (const model of GROQ_CHAT_MODELS()) {
+    const messages: ChatMsg[] = [{ role: "system", content: o.system }, ...o.recent, { role: "user", content: o.userText }];
+    try {
+      for (let round = 0; round < 6; round++) {
+        await o.step(round === 0 ? "Thinking…" : "Thinking about what it found…");
+        const turn = await groqTurn({ model, messages, tools, onText: o.partial });
+        if (!turn.toolCalls.length) return { reply: turn.content.trim(), model: `groq:${model}` };
+        o.partial("");
+        messages.push({ role: "assistant", content: turn.content || null, tool_calls: turn.toolCalls });
+        for (const c of turn.toolCalls) {
+          let args: Record<string, unknown> = {};
+          try {
+            args = JSON.parse(c.function.arguments || "{}");
+          } catch {
+            args = {};
+          }
+          await o.step(toolLabel(c.function.name, args));
+          const out = await runTool(c.function.name, args, o.ctx);
+          // Kept short: the free tier counts every word sent.
+          messages.push({ role: "tool", tool_call_id: c.id, content: JSON.stringify(out).slice(0, 6000) });
+        }
+      }
+      return { reply: o.ctx.proposals.length ? "I've prepared that below — check it and tap Confirm." : "Sorry, that took too many steps. Could you ask more specifically?", model: `groq:${model}` };
+    } catch (e) {
+      if (!(e instanceof GroqUnavailable)) throw e;
+      last = e;
+      // Something was already prepared: don't start over (it would prepare it twice).
+      if (o.ctx.proposals.length) throw new AiError("The AI stopped halfway. What it prepared so far is below — check it, or ask again.");
+    }
+  }
+  throw last instanceof GroqUnavailable ? last : new GroqUnavailable("no model answered");
 }
 
 /** What each tool call looks like in the live progress list. */

@@ -55,7 +55,8 @@ export function useJob(jobId: string | null | undefined): JobView | null {
           if (r.status !== "running") finished.current = true;
         }
         if (finished.current) return;
-        await sleep(i < 8 ? 1500 : 3000);
+        // Frequent while a job is fresh (the answer streams in), slower later.
+        await sleep(i < 60 ? 700 : 3000);
       }
     })();
 

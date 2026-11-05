@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
-import { sweepStaleJobs } from "@/lib/jobs";
 
 /** A job's live status (the page also gets instant updates; this is the backup). */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { supabase } = await requireUser();
-  await sweepStaleJobs(supabase);
-  const { data } = await supabase.from("jobs").select("id, kind, title, status, steps, summary, error, result, ref_id, cancel_requested, created_at, finished_at").eq("id", id).maybeSingle();
+  const { data } = await supabase.from("jobs").select("id, kind, title, status, steps, summary, error, result, ref_id, cancel_requested, created_at, updated_at, finished_at").eq("id", id).maybeSingle();
   if (!data) return NextResponse.json({ status: "failed", error: "Not found.", steps: [] });
+  // Cut off by the server (no word for 6+ minutes)? Say so instead of spinning forever.
+  if (data.status === "running" && Date.now() - new Date(data.updated_at).getTime() > 6 * 60_000) {
+    const error = "The server stopped this before it finished. Try again.";
+    await supabase.from("jobs").update({ status: "failed", error, finished_at: new Date().toISOString() }).eq("id", id).eq("status", "running");
+    return NextResponse.json({ ...data, status: "failed", error });
+  }
   return NextResponse.json(data);
 }
 

@@ -31,6 +31,8 @@ export type JobCtx = {
   step: (text: string) => Promise<void>;
   /** Throws JobCancelled if you pressed Stop (without adding a line). */
   checkpoint: () => Promise<void>;
+  /** The answer so far, shown live while it's being written (optional). */
+  partial?: (text: string) => void;
 };
 
 export async function createJob(
@@ -77,9 +79,27 @@ export async function runJob(
   const isCancelled = async (flag?: boolean | null) => {
     if (flag) throw new JobCancelled();
   };
+  // Live text: written at most ~4 times a second, in order.
+  let chain: Promise<unknown> = Promise.resolve();
+  let pendingText: string | null = null;
+  let lastWrite = 0;
+  let flushTimer: ReturnType<typeof setTimeout> | undefined;
+  const flush = () => {
+    flushTimer = undefined;
+    lastWrite = Date.now();
+    const text = pendingText;
+    pendingText = null;
+    if (text === null) return;
+    chain = chain.then(() => db.from("jobs").update({ summary: text, updated_at: new Date().toISOString() }).eq("id", jobId).eq("status", "running"));
+  };
   const ctx: JobCtx = {
     id: jobId,
     db,
+    partial: (text) => {
+      pendingText = text;
+      if (Date.now() - lastWrite > 250) flush();
+      else flushTimer ??= setTimeout(flush, 250);
+    },
     step: async (text) => {
       const { data } = await db.rpc("job_step", { p_job: jobId, p_text: text });
       await isCancelled(data as boolean | null);
@@ -97,6 +117,8 @@ export async function runJob(
 
   try {
     const out = (await Promise.race([work(ctx), deadline])) ?? {};
+    clearTimeout(flushTimer);
+    await chain;
     await db
       .from("jobs")
       .update({ status: "done", summary: out.summary ?? null, result: out.result ?? null, finished_at: new Date().toISOString(), updated_at: new Date().toISOString() })

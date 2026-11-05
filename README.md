@@ -70,6 +70,11 @@ Your private workspace for creator deals and (soon) personal finances.
   3. obvious patterns (bank charges, ATM, Zomato, petrol, Jio, SIPs, your own transfers, Sajilo)
   4. only then the AI, asked once with the list of new payees
 - Every payee you sort makes the next statement smarter.
+- **The assistant runs on Groq (free, fast)**:
+  - its answer appears word by word as it's written
+  - it gets a short picture of where things stand (this month's money, open deals, unpaid invoices), so most questions are answered in one go
+  - if Groq is busy it switches to Gemini; photos and scanned PDFs always go to Gemini
+  - models: `openai/gpt-oss-120b`, then `openai/gpt-oss-20b`; override with `GROQ_CHAT_MODELS`
 - Sajilo money has its own categories (income, expenses, reimbursements) and is kept out of your personal totals.
 
 ---
