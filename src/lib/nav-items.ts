@@ -8,6 +8,7 @@ export const MAIN_NAV = [
 
 export const MORE_NAV = [
   { href: "/suggestions", label: "Suggestions" },
+  { href: "/money/lending", label: "Lending & borrowing" },
   { href: "/activity", label: "Activity & undo" },
   { href: "/memory", label: "AI memory" },
   { href: "/calendar", label: "Calendar" },

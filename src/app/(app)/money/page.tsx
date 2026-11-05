@@ -47,6 +47,11 @@ export default async function MoneyPage({ searchParams }: { searchParams: Promis
         <div>
           <p className="text-sm text-slate-500">Personal money</p>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Money</h1>
+          <nav className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            <Link href="/money/transactions" className="text-brand-600 hover:underline">All transactions</Link>
+            <Link href="/money/lending" className="text-brand-600 hover:underline">🤝 Lending &amp; borrowing</Link>
+            <Link href="/money/statements" className="text-brand-600 hover:underline">Statements</Link>
+          </nav>
         </div>
         <div className="flex items-center gap-2">
           <MonthNav ym={ym} base="/money" current={current} />
