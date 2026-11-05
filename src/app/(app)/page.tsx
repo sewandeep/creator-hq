@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { SuggestionCard } from "@/components/suggestion-card";
+import { loadSuggestions } from "@/lib/suggestions";
 import { Tap, TapRow } from "@/components/tap";
 import { followedUp, invoiceAndSend, snoozeFollowUp } from "@/app/actions/quick";
 import { AskBox } from "@/components/ask-box";
@@ -28,7 +30,7 @@ export default async function Today() {
   const lastMonth = shiftMonth(ym, -1);
   const lm = monthRange(lastMonth);
 
-  const [profile, followUps, due, toInvoice, overdue, review, accounts, statements, payments, unpaid, openDeals, upcomingDel, upcomingFollow, rundown, monthTxns, failedJobs] = await Promise.all([
+  const [profile, followUps, due, toInvoice, overdue, review, accounts, statements, payments, unpaid, openDeals, upcomingDel, upcomingFollow, rundown, monthTxns, suggestions, failedJobs] = await Promise.all([
     supabase.from("profile").select("display_name, legal_name").maybeSingle(),
     supabase.from("deals").select("id, title, next_follow_up, brand:brands(name)").lte("next_follow_up", today).not("stage", "in", "(paid,lost)").order("next_follow_up").limit(8),
     supabase.from("deliverables").select("id, type, quantity, due_date, deal:deals(id, title, brand:brands(name))").neq("status", "posted").lte("due_date", addDays(today, 3)).order("due_date").limit(8),
@@ -44,6 +46,7 @@ export default async function Today() {
     supabase.from("deals").select("id, title, next_follow_up, brand:brands(name)").gt("next_follow_up", today).lte("next_follow_up", addDays(today, 7)).not("stage", "in", "(paid,lost)").order("next_follow_up").limit(6),
     supabase.from("ai_messages").select("content, created_at").eq("channel", "rundown").eq("role", "assistant").order("created_at", { ascending: false }).limit(1).maybeSingle(),
     loadTxns(supabase, `${ym}-01`, today, userId),
+    loadSuggestions(supabase, userId).catch(() => []),
     supabase.from("jobs").select("id, title").eq("status", "failed").gte("created_at", addDays(today, -2)).order("created_at", { ascending: false }).limit(5),
   ]);
 
@@ -192,6 +195,18 @@ export default async function Today() {
           </div>
         )}
       </section>
+
+      {suggestions.length > 0 && (
+        <section className="space-y-2.5">
+          <div className="flex items-baseline justify-between">
+            <h2 className="font-semibold">💡 Suggestions <span className="text-sm font-normal text-slate-400">{suggestions.length}</span></h2>
+            {suggestions.length > 3 && <Link href="/suggestions" className="text-sm text-brand-600 hover:underline">See all {suggestions.length} →</Link>}
+          </div>
+          {suggestions.slice(0, 3).map((s) => (
+            <SuggestionCard key={s.key} s={s} />
+          ))}
+        </section>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">

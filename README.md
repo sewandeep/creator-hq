@@ -75,6 +75,14 @@ Your private workspace for creator deals and (soon) personal finances.
   - it gets a short picture of where things stand (this month's money, open deals, unpaid invoices), so most questions are answered in one go
   - if Groq is busy it switches to Gemini; photos and scanned PDFs always go to Gemini
   - models: `openai/gpt-oss-120b`, then `openai/gpt-oss-20b`; override with `GROQ_CHAT_MODELS`
+- **Suggestions** (on Today, and under More), each with a one-tap fix that can be undone:
+  - brand money with no invoice: link it to the deal, or create the deal and invoice (marked paid, TDS worked out) in one tap
+  - payments in a different category than you usually use for that payee
+  - possible double charges
+  - money lent and not back after 30 days
+  - monthly payments hiding outside Subscriptions
+  - a category much higher than usual this month
+- **AI memory**: tell the assistant lasting facts ("Pankaj is my landlord") and it uses them in every answer. You can see, add and delete them under More → AI memory.
 - Sajilo money has its own categories (income, expenses, reimbursements) and is kept out of your personal totals.
 
 ---
@@ -93,6 +101,7 @@ Your private workspace for creator deals and (soon) personal finances.
    - Phase 4: `20261103000000_phase4_telegram.sql`
    - Phase 5: `20261104000000_phase5_assistant.sql`
    - Safety net: `20261105000000_safety_net.sql`
+   - Suggestions & memory: `20261106000000_suggestions_memory.sql`
 
    The app's **Setup check** page (`/setup`) shows which ones are still missing.
 

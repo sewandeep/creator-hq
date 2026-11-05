@@ -7,7 +7,9 @@ export const MAIN_NAV = [
 ];
 
 export const MORE_NAV = [
+  { href: "/suggestions", label: "Suggestions" },
   { href: "/activity", label: "Activity & undo" },
+  { href: "/memory", label: "AI memory" },
   { href: "/calendar", label: "Calendar" },
   { href: "/brands", label: "Brands" },
   { href: "/contacts", label: "Contacts" },

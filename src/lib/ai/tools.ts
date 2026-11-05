@@ -45,6 +45,11 @@ export const TOOL_DECLARATIONS = [
   { name: "get_rate_stats", description: "What brands paid per piece of content (reel, story, video…), from finished deals, plus the user's own rate card." },
   { name: "list_categories", description: "The user's money categories (names to use when categorising)." },
   { name: "list_bank_accounts", description: "The user's bank accounts and the latest statement uploaded for each." },
+  {
+    name: "remember_fact",
+    description: "Save a lasting fact or preference the user told you (who someone is, how to treat a payee, their usual rates…), so you know it next time. Saved straight away; the user can see and delete it under AI memory.",
+    parameters: obj({ fact: S("one short sentence, e.g. 'Ramesh Thapa is a Sajilo supplier — payments to him are Sajilo expenses'") }, ["fact"]),
+  },
 
   // ---- Propose: changes the user must confirm ----
   {
@@ -353,6 +358,14 @@ const TOOLS: Record<string, (a: Args, c: ToolContext) => Promise<Record<string, 
   async list_categories(_a, { db }) {
     const cats = await ensureCategories(db);
     return { categories: cats.map((c) => ({ name: c.name, counts_as: c.kind })) };
+  },
+
+  async remember_fact(a, { db, channel }) {
+    const fact = typeof a.fact === "string" ? a.fact.trim().slice(0, 300) : "";
+    if (!fact) return { error: "No fact given." };
+    const { error } = await db.from("ai_memory").insert({ fact, source: channel === "telegram" ? "telegram" : "app" });
+    if (error) return { error: /ai_memory|schema cache|does not exist/i.test(error.message) ? "Memory isn't set up yet (one database update is missing — see Setup check)." : error.message };
+    return { saved: fact };
   },
 
   async list_bank_accounts(_a, { db, userId }) {

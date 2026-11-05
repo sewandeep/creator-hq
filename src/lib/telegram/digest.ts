@@ -1,4 +1,5 @@
 import "server-only";
+import { loadSuggestions } from "@/lib/suggestions";
 import type { DB } from "@/app/actions/helpers";
 import { monthLabel, monthRange, shiftMonth, summarize, loadTxns } from "@/lib/finance/report";
 import { addDays, daysBetween, fmtDate, rupees, todayIST } from "@/lib/format";
@@ -100,7 +101,14 @@ export async function buildDigest(supabase: DB, userId: string, state: BotState,
     lines.push(`🏛️ <b>Advance tax due ${tax.label}.</b> Creator income this FY so far: ${rupees(gross)} (TDS already cut: ${rupees(tds)}). If your total tax for the year will be over ₹10,000 after TDS, pay this instalment — check with your CA.`);
   }
 
-  // 7. Monthly recap, once all of last month's statements are in.
+  // 7. Suggestions waiting in the app (brand money to link, double charges…).
+  const sugg = await loadSuggestions(supabase, userId).catch(() => []);
+  const money = sugg.filter((x) => x.type === "income");
+  if (sugg.length) {
+    lines.push(`💡 <b>${sugg.length} suggestion${sugg.length === 1 ? "" : "s"}</b> in the app${money.length ? ` — including ${money.length} brand payment${money.length === 1 ? "" : "s"} to link to an invoice` : ""}. ${esc(sugg[0].title)}`);
+  }
+
+  // 8. Monthly recap, once all of last month's statements are in.
   let recapFor: string | null = null;
   if ((accounts ?? []).length && !missing.length && state.lastRecap !== lastMonth) {
     const s = summarize(await loadTxns(supabase, lm.from, lm.to, userId));

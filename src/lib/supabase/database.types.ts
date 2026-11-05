@@ -49,6 +49,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"ai_memory": {
+                  Row: {
+                    "created_at": string,"fact": string,"id": string,"source": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"fact": string,"id"?: string,"source"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"fact"?: string,"id"?: string,"source"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"ai_messages": {
                   Row: {
                     "attachments": NonNullable<Json>,"channel": string,"content": string,"created_at": string,"id": string,"proposal_ids": (string)[],"role": string,"user_id": string
@@ -424,6 +438,20 @@ isOneToOne: false
       referencedRelation: "bank_accounts"
       referencedColumns: ["id"]
     }
+                  ]
+                },"suggestion_dismissals": {
+                  Row: {
+                    "created_at": string,"key": string,"until": string | null,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"key": string,"until"?: string | null,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"key"?: string,"until"?: string | null,"user_id"?: string
+                  }
+                  Relationships: [
+                    
                   ]
                 },"tds_checks": {
                   Row: {

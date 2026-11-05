@@ -37,6 +37,7 @@ How to work:
   • Voice note → understand what was said and act on it (usually propose_entries or a question).
 - Money entries: debit = spent / lent / paid; credit = received / got back. Default date is today. Use "Lent money" / "Money returned" with the person's name for lending.
 - General questions (Indian tax for creators — TDS sections 194J/194C/194R, GST threshold, advance tax, ITR; pricing; negotiation; writing emails): give practical, accurate help. For tax and legal matters, add one short line suggesting they confirm with their CA.
+- When the user tells you something lasting (who a person is, how a payee should be categorised, their rates or preferences), call remember_fact so you know it next time. Use what's in "Things you were told to remember" below.
 - Style: short and friendly. Use "₹" with Indian digit grouping (₹1,25,000). Use **bold** for key numbers and "- " bullet lines. No tables, no headings. Keep most answers under 150 words unless a rundown/summary is asked for.`;
 }
 
@@ -89,7 +90,8 @@ export async function runAssistant(
 
   const ctx: ToolContext = { db, userId, files: prepared.refs, channel: input.channel, proposals: [] };
   const snapshot = (await buildSnapshot(db, userId).catch(() => "")).slice(0, 1500);
-  const system = `${systemPrompt(profile?.display_name || profile?.legal_name || "")}${snapshot ? `\n\nWhere things stand right now (answer from this directly when it's enough; use tools for anything more detailed):\n${snapshot}` : ""}`;
+  const memory = await loadMemoryFacts(db);
+  const system = `${systemPrompt(profile?.display_name || profile?.legal_name || "")}${memory ? `\n\nThings you were told to remember:\n${memory}` : ""}${snapshot ? `\n\nWhere things stand right now (answer from this directly when it's enough; use tools for anything more detailed):\n${snapshot}` : ""}`;
   let reply = "";
   let model = "";
 
@@ -169,6 +171,13 @@ export async function runAssistant(
   return { reply, proposals: ctx.proposals, model };
 }
 
+/** Facts the user asked the assistant to remember (newest first, kept short). */
+async function loadMemoryFacts(db: DB) {
+  const { data, error } = await db.from("ai_memory").select("fact").order("created_at", { ascending: false }).limit(30);
+  if (error || !data?.length) return "";
+  return data.map((m) => `- ${m.fact}`).join("\n").slice(0, 1500);
+}
+
 /** The assistant loop on Groq: streamed text, tools, up to 6 rounds. */
 async function groqAssistant(o: {
   system: string;
@@ -238,6 +247,7 @@ function toolLabel(name: string, args: Record<string, unknown>) {
     propose_statement_import: "Preparing the statement import",
     propose_past_work_import: "Preparing the import",
     propose_attach_to_deal: "Preparing to attach the file",
+    remember_fact: "Saving that to memory",
   };
   return labels[name] ?? "Looking things up";
 }

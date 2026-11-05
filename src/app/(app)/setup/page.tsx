@@ -109,6 +109,24 @@ export default async function SetupPage() {
         }
       : { ok: true, title: "Safety net — Activity, Undo, live progress" },
   );
+  const { error: memError } = await supabase.from("ai_memory").select("id").limit(0);
+  migrationChecks.push(
+    memError
+      ? {
+          ok: false,
+          title: "Suggestions & AI memory: database update not applied",
+          detail: (
+            <>
+              Run{" "}
+              <a className="link" href="https://github.com/sewandeep/creator-hq/blob/main/supabase/migrations/20261106000000_suggestions_memory.sql" target="_blank" rel="noreferrer">
+                20261106000000_suggestions_memory.sql
+              </a>{" "}
+              in the Supabase SQL Editor, then reload this page. Until then, dismissing suggestions and AI memory won&apos;t save.
+            </>
+          ),
+        }
+      : { ok: true, title: "Suggestions & AI memory" },
+  );
   const { error: bucketError } = await supabase.storage.from("deal-files").list("", { limit: 1 });
   const { error: stmtBucketError } = await supabase.storage.from("statements").list("", { limit: 1 });
   const { data: profile } = await supabase.from("profile").select("legal_name, pan, bank_account_number").maybeSingle();
