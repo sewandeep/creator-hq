@@ -171,7 +171,20 @@ export async function processStatement(supabase: DB, statementId: string, passwo
   });
   const { data: existing } = await supabase.from("transactions").select("dedupe_key").in("dedupe_key", keyed.map((k) => k.key));
   const existingKeys = new Set((existing ?? []).map((e) => e.dedupe_key));
-  const fresh = keyed.filter((k) => !existingKeys.has(k.key));
+  // Also catch rows saved before from a differently-worded reading of the same
+  // statement (e.g. read by AI earlier): same day, amount, direction and balance.
+  const sortedDates = rows.map((r) => r.dateIso).sort();
+  const { data: sameAccount } = await supabase
+    .from("transactions")
+    .select("txn_date, direction, amount, balance")
+    .eq("account_id", st.account_id)
+    .eq("source", "statement")
+    .not("balance", "is", null)
+    .gte("txn_date", sortedDates[0])
+    .lte("txn_date", sortedDates[sortedDates.length - 1]);
+  const sig = (d: string, dir: string, amt: number, bal: number | null) => `${d}|${dir}|${Number(amt).toFixed(2)}|${bal === null ? "" : Math.abs(Number(bal)).toFixed(2)}`;
+  const seenSigs = new Set((sameAccount ?? []).map((t) => sig(t.txn_date, t.direction, Number(t.amount), t.balance === null ? null : Number(t.balance))));
+  const fresh = keyed.filter((k) => !existingKeys.has(k.key) && !(k.r.balance !== null && seenSigs.has(sig(k.r.dateIso, k.r.direction, k.r.amount, k.r.balance))));
 
   const dates = rows.map((r) => r.dateIso).sort();
   const rules = await loadRules(supabase);
