@@ -6,12 +6,24 @@ import { ensureCategories } from "@/lib/finance/categories-server";
 import { counts, loadTxns, monthRange } from "@/lib/finance/report";
 import { fmtDate, rupees, todayIST } from "@/lib/format";
 import { InlineCategory } from "../category-select";
+import { AddSheet } from "../add-sheet";
 import { MonthNav } from "../month-nav";
 import { QuickAdd } from "../quick-add";
 
 export const metadata: Metadata = { title: "Transactions" };
 
-type Search = { month?: string; account?: string; category?: string; kind?: string; q?: string; review?: string };
+type Search = { month?: string; account?: string; category?: string; kind?: string; q?: string; review?: string; dir?: string };
+
+const KINDS = [
+  ["expense", "Spending"],
+  ["income", "Income"],
+  ["family", "Family"],
+  ["lending", "Lending & borrowing"],
+  ["passthrough", "Pass-through"],
+  ["transfer", "Transfers"],
+  ["savings", "Investments"],
+  ["none", "Not sorted yet"],
+] as const;
 
 export default async function TransactionsPage({ searchParams }: { searchParams: Promise<Search> }) {
   const sp = await searchParams;
@@ -30,14 +42,15 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
   const rows = all
     .filter((t) => !sp.account || t.account_id === sp.account)
     .filter((t) => !sp.category || t.category?.id === sp.category)
-    .filter((t) => !sp.kind || (t.category?.kind ?? (t.direction === "debit" ? "expense" : "income")) === sp.kind)
+    .filter((t) => !sp.kind || (sp.kind === "none" ? !t.category : t.category?.kind === sp.kind))
+    .filter((t) => !sp.dir || t.direction === sp.dir)
     .filter((t) => !sp.review || t.needs_review)
     .filter((t) => !needle || [t.description, t.counterparty, t.note, t.person].some((v) => v?.toLowerCase().includes(needle)))
     .reverse();
   const live = rows.filter(counts);
   const out = live.filter((t) => t.direction === "debit").reduce((s, t) => s + t.amount, 0);
   const inn = live.filter((t) => t.direction === "credit").reduce((s, t) => s + t.amount, 0);
-  const extra = (["account", "category", "kind", "q", "review"] as const).map((k) => (sp[k] ? `&${k}=${encodeURIComponent(sp[k]!)}` : "")).join("");
+  const extra = (["account", "category", "kind", "q", "review", "dir"] as const).map((k) => (sp[k] ? `&${k}=${encodeURIComponent(sp[k]!)}` : "")).join("");
 
   return (
     <>
@@ -47,7 +60,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
         actions={
           <>
             <MonthNav ym={ym} base="/money/transactions" current={current} extra={extra} />
-            <Link href="/money/add" className="btn-secondary">+ Add</Link>
+            <AddSheet categories={categories} today={todayIST()} className="btn-secondary" />
           </>
         }
       />
@@ -55,7 +68,16 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
 
       <form className="mb-4 flex flex-wrap gap-2" action="/money/transactions">
         <input type="hidden" name="month" value={ym} />
-        <input name="q" defaultValue={sp.q} placeholder="Search payee, note…" className="input max-w-52" />
+        <input name="q" defaultValue={sp.q} placeholder="Search payee, person, note…" className="input max-w-52" />
+        <select name="dir" defaultValue={sp.dir ?? ""} className="input w-auto">
+          <option value="">In & out</option>
+          <option value="debit">Money out</option>
+          <option value="credit">Money in</option>
+        </select>
+        <select name="kind" defaultValue={sp.kind ?? ""} className="input w-auto">
+          <option value="">All types</option>
+          {KINDS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+        </select>
         <select name="account" defaultValue={sp.account ?? ""} className="input w-auto">
           <option value="">All accounts</option>
           {accounts?.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -104,7 +126,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
                       </div>
                     </td>
                     <td className="td">
-                      <InlineCategory transactionId={t.id} categories={categories} value={t.category?.id ?? null} />
+                      <InlineCategory transactionId={t.id} categories={categories} direction={t.direction} value={t.category?.id ?? null} />
                     </td>
                     <td className={`td text-right font-medium whitespace-nowrap tabular-nums ${t.direction === "credit" ? "text-emerald-700" : ""}`}>
                       {t.direction === "debit" ? "−" : "+"}{rupees(t.amount)}

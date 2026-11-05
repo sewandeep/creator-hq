@@ -4,8 +4,9 @@ import { suggestPattern } from "@/lib/finance/categorize";
 import type { Category } from "@/lib/finance/categories-server";
 import type { ReviewTxn } from "./review-card";
 
-// The categories people use most, shown as one-tap buttons.
-const QUICK = ["Food & dining", "Groceries", "Travel & cabs", "Shopping", "Family", "Rent", "Bills & utilities", "Lent money", "Money returned", "Self transfer", "Creator work expenses", "Other spending"];
+// The categories people use most, shown as one-tap buttons — by direction.
+const QUICK_OUT = ["Food & dining", "Groceries", "Fuel", "Travel & cabs", "Shopping", "Studio & equipment", "EMI & loans", "Family", "Lent money", "Paid back a loan", "Self transfer", "Pass-through", "Other spending"];
+const QUICK_IN = ["Creator income", "Freelance income", "Sajilo income", "Sajilo reimbursements", "Other income", "Family", "Money returned", "Borrowed", "Refunds & cashback", "Self transfer", "Pass-through"];
 
 /** Transactions waiting for you, ready for the sort cards. */
 export async function loadReviewItems(supabase: DB, categories: Category[], limit: number) {
@@ -15,9 +16,11 @@ export async function loadReviewItems(supabase: DB, categories: Category[], limi
     .eq("needs_review", true)
     .order("txn_date", { ascending: false })
     .limit(limit);
-  const quick = QUICK.map((n) => categories.find((c) => c.name === n)).filter((c): c is Category => Boolean(c));
+  const pick = (names: string[]) => names.map((n) => categories.find((c) => c.name === n)).filter((c): c is Category => Boolean(c));
+  const quickOut = pick(QUICK_OUT);
+  const quickIn = pick(QUICK_IN);
   const items = (data ?? []).map((t) => ({
-    quick: t.direction === "credit" ? categories.filter((c) => c.kind === "income" || c.name === "Money returned" || c.name === "Self transfer") : quick,
+    quick: t.direction === "credit" ? quickIn : quickOut,
     t: {
       id: t.id,
       txn_date: t.txn_date,

@@ -15,6 +15,8 @@ export type SuggestionAction =
   | { kind: "create_deal"; label: string; txnId: string; brand: string; title: string }
   | { kind: "recat"; label: string; txnIds: string[]; categoryId: string; pattern?: string }
   | { kind: "got_back"; label: string; person: string; amount: number }
+  | { kind: "paid_back"; label: string; person: string; amount: number }
+  | { kind: "passthrough"; label: string; txnIds: string[]; note: string }
   | { kind: "snooze"; label: string; days: number }
   | { kind: "dismiss"; label: string }
   | { kind: "link"; label: string; href: string }
@@ -22,7 +24,7 @@ export type SuggestionAction =
 
 export type Suggestion = {
   key: string;
-  type: "income" | "recat" | "duplicate" | "lending" | "subscription" | "spike";
+  type: "income" | "recat" | "duplicate" | "lending" | "subscription" | "spike" | "passthrough";
   icon: string;
   title: string;
   detail: string;
@@ -189,18 +191,31 @@ export async function loadSuggestions(db: DB, userId: string, opts: { limit?: nu
   }
   for (const [person, r] of people) {
     const days = daysBetween(r.lastLent, today);
-    if (r.owed < 1 || days < 30) continue;
-    push({
-      key: `lend:${person.toLowerCase()}:${r.lastLent}`,
-      type: "lending",
-      icon: "🤝",
-      title: `${person} still owes you ${rupees(r.owed)}`,
-      detail: `Last lent ${days} days ago (${fmtDate(r.lastLent)}).`,
-      actions: [
-        { kind: "got_back", label: "Got it back", person, amount: Math.round(r.owed * 100) / 100 },
-        { kind: "snooze", label: "Remind me next week", days: 7 },
-      ],
-    });
+    if (r.owed >= 1 && days >= 30) {
+      push({
+        key: `lend:${person.toLowerCase()}:${r.lastLent}`,
+        type: "lending",
+        icon: "🤝",
+        title: `${person} still owes you ${rupees(r.owed)}`,
+        detail: `Last lent ${days} days ago (${fmtDate(r.lastLent)}).`,
+        actions: [
+          { kind: "got_back", label: "Got it back", person, amount: Math.round(r.owed * 100) / 100 },
+          { kind: "snooze", label: "Remind me next week", days: 7 },
+        ],
+      });
+    } else if (r.owed <= -1) {
+      push({
+        key: `owe:${person.toLowerCase()}:${Math.round(-r.owed)}`,
+        type: "lending",
+        icon: "🙏",
+        title: `You owe ${person} ${rupees(-r.owed)}`,
+        detail: "From money you borrowed. Paid it back in cash or another account? Mark it here.",
+        actions: [
+          { kind: "paid_back", label: "I've paid it back", person, amount: Math.round(-r.owed * 100) / 100 },
+          { kind: "snooze", label: "Remind me next week", days: 7 },
+        ],
+      });
+    }
   }
 
   // 5. Monthly payments hiding outside Subscriptions --------------------------
@@ -267,6 +282,58 @@ export async function loadSuggestions(db: DB, userId: string, opts: { limit?: nu
       actions: [
         { kind: "link", label: "See them", href: `/money/transactions?month=${ym}&category=${cid}` },
         { kind: "dismiss", label: "OK" },
+      ],
+    });
+  }
+
+  // 7. Money that came in only to go out again ---------------------------------
+  const settled = (t: T) => {
+    const c = t.category_id ? cat.get(t.category_id) : null;
+    return t.category_source === "user" || t.payment_id || (c && (c.kind === "passthrough" || c.kind === "transfer" || isSajilo(c.name)));
+  };
+  const ins = txns.filter((t) => t.direction === "credit" && t.amount >= 1000 && t.source === "statement" && !settled(t));
+  // Payments already sorted as ordinary spending (bills, fuel, shopping…) are never "passing through".
+  const spendingSorted = (t: T) => {
+    const c = t.category_id ? cat.get(t.category_id) : null;
+    return Boolean(c && c.kind !== "lending" && c.kind !== "family" && t.category_source !== "ai" && t.category_source !== "none");
+  };
+  const outs = txns.filter((t) => t.direction === "debit" && t.source === "statement" && !settled(t) && !spendingSorted(t));
+  const used = new Set<string>();
+  const near = (a: string, b: string, days: number) => Math.abs(daysBetween(a, b)) <= days;
+  for (const inc of ins) {
+    let match: T[] | null = null;
+    const same = outs.find((o) => !used.has(o.id) && Math.abs(o.amount - inc.amount) <= 1 && near(o.txn_date, inc.txn_date, 4));
+    if (same) match = [same];
+    else {
+      // Split across two or three payments out within a week — all to the same person.
+      const pool = outs.filter((o) => !used.has(o.id) && o.amount >= inc.amount * 0.1 && o.amount < inc.amount && o.txn_date >= inc.txn_date && near(o.txn_date, inc.txn_date, 7)).slice(0, 12);
+      const samePerson = (xs: T[]) => new Set(xs.map((x) => payeeKey(x))).size === 1;
+      outer: for (let i = 0; i < pool.length; i++)
+        for (let j = i + 1; j < pool.length; j++) {
+          if (Math.abs(pool[i].amount + pool[j].amount - inc.amount) <= 1 && samePerson([pool[i], pool[j]])) {
+            match = [pool[i], pool[j]];
+            break outer;
+          }
+          for (let k = j + 1; k < pool.length; k++)
+            if (Math.abs(pool[i].amount + pool[j].amount + pool[k].amount - inc.amount) <= 1 && samePerson([pool[i], pool[j], pool[k]])) {
+              match = [pool[i], pool[j], pool[k]];
+              break outer;
+            }
+        }
+    }
+    if (!match) continue;
+    match.forEach((m) => used.add(m.id));
+    const from = title(inc.counterparty || inc.description.slice(0, 30));
+    const to = [...new Set(match.map((m) => title(m.counterparty || m.description.slice(0, 30))))].join(", ");
+    push({
+      key: `pt:${inc.id}`,
+      type: "passthrough",
+      icon: "🔀",
+      title: `${rupees(inc.amount)} came in from ${from} and went out to ${to}`,
+      detail: `${fmtDate(inc.txn_date)}${match.length > 1 ? ` · sent on in ${match.length} payments` : ""}. Just passing through? Then it won't count as income or spending.`,
+      actions: [
+        { kind: "passthrough", label: "Yes, passing through", txnIds: [inc.id, ...match.map((m) => m.id)], note: `Passed through: from ${from} to ${to}` },
+        { kind: "dismiss", label: "No, they're separate" },
       ],
     });
   }

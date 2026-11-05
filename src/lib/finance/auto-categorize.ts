@@ -1,6 +1,7 @@
 import "server-only";
 import type { DB } from "@/app/actions/helpers";
 import { groqJson, isGroqConfigured } from "@/lib/groq";
+import { fitsDirection } from "./categories";
 import type { Category } from "./categories-server";
 import { findRule, matchText, type Rule } from "./categorize";
 import { generateJson } from "./gemini";
@@ -45,6 +46,13 @@ const PATTERNS: Pattern[] = [
   { re: /NETFLIX|SPOTIFY|YOUTUBE ?GOOGLE|GOOGLE ?WORKSPACE|HOTSTAR|PRIME ?VIDEO|APPLE\.COM|ICLOUD|CANVA|CHATGPT|OPENAI/i, dir: "debit", category: "Subscriptions", confidence: 0.85, why: "Subscription" },
   { re: /UBER|OLA\b|RAPIDO/i, dir: "debit", category: "Travel & cabs", confidence: 0.85, why: "Cab" },
   { re: /AMAZON|FLIPKART|MYNTRA|AJIO|MEESHO|NYKAA/i, dir: "debit", category: "Shopping", confidence: 0.7, why: "Online shopping" },
+  { re: /APPLE MEDIA|APPLE SERVICES|APPLAMP|ITUNES|APP ?STORE|FAN ?CODE|GOOGLE PLAY|YOUTUBE PREMIUM/i, dir: "debit", category: "Subscriptions", confidence: 0.85, why: "App / streaming subscription" },
+  { re: /REDBUS|IRCTC|MAKEMYTRIP|GOIBIBO|INDIGO|AIR ?INDIA|\bBUS\b|\bTAXI\b/i, dir: "debit", category: "Travel & cabs", confidence: 0.85, why: "Travel booking" },
+  { re: /MEDIC|PHARMA|CHEMIST|HOSPITAL|CLINIC|APOLLO|DIAGNOSTIC|medicine/i, dir: "debit", category: "Health & medicines", confidence: 0.85, why: "Medicines / health" },
+  { re: /TATA ?SKY|TATA ?PLAY|\bDTH\b|ELECTRICITY|POWER DEPT|WATER BILL|\bLPG\b|GAS BOOKING/i, dir: "debit", category: "Bills & utilities", confidence: 0.85, why: "Bill" },
+  { re: /\bMART\b|SUPERMARKET|KIRANA|GENERAL STORE|chicken|\bmilk\b|\beggs?\b|vegetables?|\brice\b|\bration\b/i, dir: "debit", category: "Groceries", confidence: 0.8, why: "Groceries" },
+  { re: /\b(coffee|tea|chai|breakfast|lunch|dinner|snacks?|samosa|momos?|wai ?wai|chowmein|food bill|restaurant|cafe|bakery)\b/i, dir: "debit", category: "Food & dining", confidence: 0.8, why: "Food" },
+  { re: /^REV-UPI|\bREV\b.*UPI|REVERSAL|MANDATE REFU/i, dir: "credit", category: "Refunds & cashback", confidence: 0.85, why: "Refund / reversal" },
 ];
 
 function patternFor(r: CatRow, ownerNames: string[], names: Set<string>): Omit<Pattern, "re"> | null {
@@ -100,12 +108,13 @@ type AiPayee = { k: string; payee: string; direction: "money out" | "money in"; 
 type AiAnswer = { items: { k: string; category: string; confidence: number; why: string }[] };
 
 const AI_SYSTEM = (cats: Category[]) => `You sort bank payments for an Indian content creator who also runs a small business called Sajilo (Sajilo Services). You get a list of payees from their bank statement. For each payee pick ONE category from this list (use the exact name), or "Uncategorized":
-${cats.map((c) => `- ${c.name} (${c.kind})`).join("\n")}
+${cats.map((c) => `- ${c.name} (${c.kind}; ${c.direction === "out" ? "money out only" : c.direction === "in" ? "money in only" : "either way"})`).join("\n")}
 
 Rules:
+- The category must fit the direction: never a spending category for money in, never income for money out.
 - A person's name with no clear purpose (UPI to/from an individual) → "Uncategorized", confidence 0.3. Do not guess a category for people.
 - Use the notes: "Petrol" → Fuel, "Snacks"/"Samosa"/"Wai wai" → Food & dining, "Rice"/"Ration" → Groceries, "EMI" → EMI & loans, "Salary" → income.
-- Brands/companies paying money in (NEFT/IMPS from a company) are probably "Creator income" (confidence 0.6).
+- Money in from a company is NOT automatically creator income — it may be freelance, Sajilo or other. Use "Uncategorized" (confidence 0.3) unless the name or note makes it clear.
 - Facebook/Instagram/Google ads → "Creator work expenses" unless the note mentions Sajilo.
 - confidence: 0.9+ only when obvious from the name or note.
 - why: at most 5 words.
@@ -169,7 +178,8 @@ export async function autoCategorize(
       continue;
     }
     const mem = memory.get(`${payeeKey(r)}|${r.direction}`);
-    if (mem && mem.share >= 0.6 && byId.has(mem.categoryId)) {
+    // Pass-through is only ever for amounts that match up — never carried over by memory.
+    if (mem && mem.share >= 0.6 && byId.has(mem.categoryId) && byId.get(mem.categoryId)!.kind !== "passthrough" && fitsDirection(byId.get(mem.categoryId)!, r.direction)) {
       const cat = byId.get(mem.categoryId)!;
       r.category = cat.name;
       r.confidence = mem.share >= 0.9 ? 0.95 : 0.8;
@@ -224,9 +234,10 @@ export async function autoCategorize(
         const byK = new Map(answers.map((a) => [String(a.k), a]));
         for (const p of batch) {
           const a = byK.get(p.k);
-          const ok = a && names.has(String(a.category).toLowerCase());
+          const picked = a ? opts.categories.find((c) => c.name.toLowerCase() === String(a.category).toLowerCase()) : undefined;
+          const ok = Boolean(picked && fitsDirection(picked, p.direction === "money out" ? "debit" : "credit"));
           for (const r of groups.get(p._key) ?? []) {
-            r.category = ok ? opts.categories.find((c) => c.name.toLowerCase() === String(a!.category).toLowerCase())!.name : "Uncategorized";
+            r.category = ok ? picked!.name : "Uncategorized";
             r.confidence = ok ? Math.max(0, Math.min(1, Number(a!.confidence) || 0)) : 0.2;
             r.why = (a?.why ?? "Not sure what this was").slice(0, 60);
             r.source = "ai";

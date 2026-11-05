@@ -10,7 +10,7 @@ import type { Json } from "@/lib/supabase/database.types";
 // can watch, a Stop button, a time limit, and a record in Activity afterwards.
 // Changes a job makes are tagged with its id, so the whole job can be undone.
 
-export type JobKind = "chat" | "statement" | "apply" | "rundown" | "telegram" | "daily";
+export type JobKind = "chat" | "statement" | "apply" | "rundown" | "telegram" | "daily" | "resort";
 
 export class JobCancelled extends Error {
   constructor() {

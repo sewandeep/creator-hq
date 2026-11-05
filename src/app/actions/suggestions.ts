@@ -43,6 +43,24 @@ export async function applySuggestion(
         await addEntry(supabase, { amount: action.amount, direction: "credit", description: `Got back from ${action.person}`, date: todayIST(), isCash: false, person: action.person, categoryId: back?.id ?? null, source: "manual" });
         return { ok: true, message: `Noted — ${action.person} paid you back.`, ...(await refreshAll()) };
       }
+      case "paid_back": {
+        const cats = await ensureCategories(supabase);
+        const back = cats.find((c) => c.name === "Paid back a loan") ?? cats.find((c) => c.kind === "lending" && c.direction === "out");
+        await addEntry(supabase, { amount: action.amount, direction: "debit", description: `Paid back ${action.person}`, date: todayIST(), isCash: true, person: action.person, categoryId: back?.id ?? null, source: "manual" });
+        return { ok: true, message: `Noted — you paid ${action.person} back.`, ...(await refreshAll()) };
+      }
+      case "passthrough": {
+        const cats = await ensureCategories(supabase);
+        const pt = cats.find((c) => c.kind === "passthrough");
+        if (!pt) throw new Error("Run the latest database update first (Setup check).");
+        const pairId = crypto.randomUUID();
+        for (const id of action.txnIds) {
+          const r = await applyCategory(supabase, { transactionId: id, categoryId: pt.id, note: action.note });
+          if (r.error) throw new Error(r.error);
+          await supabase.from("transactions").update({ pair_id: pairId }).eq("id", id);
+        }
+        return { ok: true, message: "Marked as passing through — not counted as income or spending.", ...(await refreshAll()) };
+      }
       case "snooze":
         await supabase.from("suggestion_dismissals").upsert({ key, until: addDays(todayIST(), action.days) });
         await refreshAll();

@@ -135,14 +135,14 @@ isOneToOne: false
                   ]
                 },"categories": {
                   Row: {
-                    "created_at": string,"emoji": string | null,"id": string,"is_business": boolean,"kind": string,"name": string,"position": number,"user_id": string
+                    "created_at": string,"direction": string,"emoji": string | null,"id": string,"is_business": boolean,"kind": string,"name": string,"position": number,"stream": string | null,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "created_at"?: string,"emoji"?: string | null,"id"?: string,"is_business"?: boolean,"kind": string,"name": string,"position"?: number,"user_id"?: string
+                    "created_at"?: string,"direction"?: string,"emoji"?: string | null,"id"?: string,"is_business"?: boolean,"kind": string,"name": string,"position"?: number,"stream"?: string | null,"user_id"?: string
                   }
                   Update: {
-                    "created_at"?: string,"emoji"?: string | null,"id"?: string,"is_business"?: boolean,"kind"?: string,"name"?: string,"position"?: number,"user_id"?: string
+                    "created_at"?: string,"direction"?: string,"emoji"?: string | null,"id"?: string,"is_business"?: boolean,"kind"?: string,"name"?: string,"position"?: number,"stream"?: string | null,"user_id"?: string
                   }
                   Relationships: [
                     
@@ -495,14 +495,14 @@ isOneToOne: false
                   ]
                 },"transactions": {
                   Row: {
-                    "account_id": string | null,"amount": number,"balance": number | null,"category_id": string | null,"category_reason": string | null,"category_source": string,"confidence": number | null,"counterparty": string | null,"created_at": string,"dedupe_key": string | null,"description": string,"direction": string,"id": string,"is_cash": boolean,"matched_txn_id": string | null,"needs_review": boolean,"note": string | null,"payment_id": string | null,"person": string | null,"reference": string | null,"review_reason": string | null,"seq": number | null,"source": string,"statement_id": string | null,"suggested_invoice_id": string | null,"txn_date": string,"updated_at": string,"upi_id": string | null,"user_id": string
+                    "account_id": string | null,"amount": number,"balance": number | null,"category_id": string | null,"category_reason": string | null,"category_source": string,"confidence": number | null,"counterparty": string | null,"created_at": string,"dedupe_key": string | null,"description": string,"direction": string,"id": string,"is_cash": boolean,"matched_txn_id": string | null,"needs_review": boolean,"note": string | null,"pair_id": string | null,"payment_id": string | null,"person": string | null,"reference": string | null,"review_reason": string | null,"seq": number | null,"source": string,"statement_id": string | null,"suggested_invoice_id": string | null,"txn_date": string,"updated_at": string,"upi_id": string | null,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "account_id"?: string | null,"amount": number,"balance"?: number | null,"category_id"?: string | null,"category_reason"?: string | null,"category_source"?: string,"confidence"?: number | null,"counterparty"?: string | null,"created_at"?: string,"dedupe_key"?: string | null,"description": string,"direction": string,"id"?: string,"is_cash"?: boolean,"matched_txn_id"?: string | null,"needs_review"?: boolean,"note"?: string | null,"payment_id"?: string | null,"person"?: string | null,"reference"?: string | null,"review_reason"?: string | null,"seq"?: number | null,"source"?: string,"statement_id"?: string | null,"suggested_invoice_id"?: string | null,"txn_date": string,"updated_at"?: string,"upi_id"?: string | null,"user_id"?: string
+                    "account_id"?: string | null,"amount": number,"balance"?: number | null,"category_id"?: string | null,"category_reason"?: string | null,"category_source"?: string,"confidence"?: number | null,"counterparty"?: string | null,"created_at"?: string,"dedupe_key"?: string | null,"description": string,"direction": string,"id"?: string,"is_cash"?: boolean,"matched_txn_id"?: string | null,"needs_review"?: boolean,"note"?: string | null,"pair_id"?: string | null,"payment_id"?: string | null,"person"?: string | null,"reference"?: string | null,"review_reason"?: string | null,"seq"?: number | null,"source"?: string,"statement_id"?: string | null,"suggested_invoice_id"?: string | null,"txn_date": string,"updated_at"?: string,"upi_id"?: string | null,"user_id"?: string
                   }
                   Update: {
-                    "account_id"?: string | null,"amount"?: number,"balance"?: number | null,"category_id"?: string | null,"category_reason"?: string | null,"category_source"?: string,"confidence"?: number | null,"counterparty"?: string | null,"created_at"?: string,"dedupe_key"?: string | null,"description"?: string,"direction"?: string,"id"?: string,"is_cash"?: boolean,"matched_txn_id"?: string | null,"needs_review"?: boolean,"note"?: string | null,"payment_id"?: string | null,"person"?: string | null,"reference"?: string | null,"review_reason"?: string | null,"seq"?: number | null,"source"?: string,"statement_id"?: string | null,"suggested_invoice_id"?: string | null,"txn_date"?: string,"updated_at"?: string,"upi_id"?: string | null,"user_id"?: string
+                    "account_id"?: string | null,"amount"?: number,"balance"?: number | null,"category_id"?: string | null,"category_reason"?: string | null,"category_source"?: string,"confidence"?: number | null,"counterparty"?: string | null,"created_at"?: string,"dedupe_key"?: string | null,"description"?: string,"direction"?: string,"id"?: string,"is_cash"?: boolean,"matched_txn_id"?: string | null,"needs_review"?: boolean,"note"?: string | null,"pair_id"?: string | null,"payment_id"?: string | null,"person"?: string | null,"reference"?: string | null,"review_reason"?: string | null,"seq"?: number | null,"source"?: string,"statement_id"?: string | null,"suggested_invoice_id"?: string | null,"txn_date"?: string,"updated_at"?: string,"upi_id"?: string | null,"user_id"?: string
                   }
                   Relationships: [
                     {

@@ -1,4 +1,5 @@
 import "server-only";
+import { fitsDirection } from "./categories";
 import type { DB } from "@/app/actions/helpers";
 import { rupees } from "@/lib/format";
 import { findInvoiceMatch, findManualMatch, findRule, loadOpenInvoices, loadRules, loadUnmatchedManual, matchReason, matchText } from "./categorize";
@@ -253,7 +254,9 @@ export async function processStatement(supabase: DB, statementId: string, passwo
         review_reason = "Who was this with?";
       }
     } else {
-      const cat = catByName.get(r.category.toLowerCase());
+      const found = catByName.get(r.category.toLowerCase());
+      // The AI's guess must fit the direction (no spending category on money in).
+      const cat = found && fitsDirection(found, r.direction) ? found : undefined;
       category_id = cat?.id ?? null;
       category_source = cat ? "ai" : "none";
       const pct = Math.round(Math.max(0, Math.min(1, Number(r.confidence) || 0)) * 100);

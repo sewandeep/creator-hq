@@ -3,9 +3,15 @@
 import { useState } from "react";
 import { setCategory } from "@/app/actions/finance";
 import { toast } from "@/components/toast";
-import { KIND_LABEL, type CategoryKind } from "@/lib/finance/categories";
+import { KIND_LABEL, fitsDirection, type CategoryKind } from "@/lib/finance/categories";
 
-export type Cat = { id: string; name: string; kind: string; emoji: string | null };
+export type Cat = { id: string; name: string; kind: string; emoji: string | null; direction?: string | null };
+
+// Most likely groups first: spending for money out, income for money in.
+const ORDER: Record<"debit" | "credit", CategoryKind[]> = {
+  debit: ["expense", "family", "lending", "savings", "transfer", "passthrough"],
+  credit: ["income", "family", "lending", "savings", "transfer", "passthrough"],
+};
 
 /** A category dropdown grouped by Spending / Income / Transfer / Savings / Lending. */
 export function CategorySelect({
@@ -15,20 +21,27 @@ export function CategorySelect({
   name,
   className = "input",
   placeholder = "Choose a category…",
+  direction,
 }: {
   categories: Cat[];
+  /** Only offer categories that fit money going this way. */
+  direction?: "debit" | "credit";
   value?: string;
   onChange?: (id: string) => void;
   name?: string;
   className?: string;
   placeholder?: string;
 }) {
-  const kinds = Object.keys(KIND_LABEL) as CategoryKind[];
+  const kinds = direction ? ORDER[direction] : (Object.keys(KIND_LABEL) as CategoryKind[]);
+  const shown = direction ? categories.filter((c) => fitsDirection(c, direction)) : categories;
+  // A category already set that doesn't fit is still shown, so you can see what to change.
+  const misfit = value ? categories.find((c) => c.id === value && !shown.includes(c)) : undefined;
   return (
     <select name={name} value={value} onChange={onChange ? (e) => onChange(e.target.value) : undefined} className={className}>
       <option value="">{placeholder}</option>
+      {misfit && <option value={misfit.id}>⚠️ {misfit.name} (wrong way — pick again)</option>}
       {kinds.map((k) => {
-        const items = categories.filter((c) => c.kind === k);
+        const items = shown.filter((c) => c.kind === k);
         if (!items.length) return null;
         return (
           <optgroup key={k} label={KIND_LABEL[k]}>
@@ -46,13 +59,14 @@ export function CategorySelect({
 }
 
 /** Inline category changer for transaction lists (no "remember"). */
-export function InlineCategory({ transactionId, categories, value }: { transactionId: string; categories: Cat[]; value: string | null }) {
+export function InlineCategory({ transactionId, categories, value, direction }: { transactionId: string; categories: Cat[]; value: string | null; direction?: "debit" | "credit" }) {
   // Shows your choice immediately; saves in the background.
   const [shown, setShown] = useState(value ?? "");
   return (
     <form aria-label="Category">
       <CategorySelect
         categories={categories}
+        direction={direction}
         value={shown}
         placeholder="❓ Choose…"
         className={`w-full max-w-52 rounded-md border bg-white px-2 py-1 text-xs ${shown ? "border-slate-200 text-slate-700" : "border-amber-300 text-amber-800"}`}

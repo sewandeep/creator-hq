@@ -17,7 +17,7 @@ export default async function MemoryPage() {
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">AI memory</h1>
       </div>
       <p className="text-sm text-slate-600">
-        Tell the assistant things like <i>“remember that Pankaj is my landlord”</i> and they show up here. Sorting a payee with <b>Always use</b> is remembered separately (as a rule).
+        Tell the assistant things like <i>“remember that Ravi is my landlord”</i> and they show up here. Sorting a payee with <b>Always use</b> is remembered separately (as a rule).
       </p>
       <AddMemory />
       {error ? (

@@ -6,6 +6,8 @@ import { isAiConfigured } from "@/lib/finance/gemini";
 import { counts, loadTxns, monthLabel, monthRange, shiftMonth, summarize } from "@/lib/finance/report";
 import { fmtDate, rupees, todayIST } from "@/lib/format";
 import { InlineCategory } from "./category-select";
+import { AddSheet } from "./add-sheet";
+import { ResortButton } from "./resort-button";
 import { MonthNav } from "./month-nav";
 import { QuickAdd } from "./quick-add";
 import { ReviewList } from "./review-card";
@@ -33,7 +35,6 @@ export default async function MoneyPage({ searchParams }: { searchParams: Promis
   const maxCat = Math.max(1, ...s.spendingCats.map((c) => c.amount));
   const leftOver = s.income - s.spent - s.invested;
   const recent = txns.filter(counts).slice(-12).reverse();
-  const owedToYou = s.lent - s.returned;
   const cashGap = s.cashWithdrawn - s.cashLogged;
   const covered = (accountId: string, m: string) => {
     const r = monthRange(m);
@@ -47,7 +48,10 @@ export default async function MoneyPage({ searchParams }: { searchParams: Promis
           <p className="text-sm text-slate-500">Personal money</p>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Money</h1>
         </div>
-        <MonthNav ym={ym} base="/money" current={current} />
+        <div className="flex items-center gap-2">
+          <MonthNav ym={ym} base="/money" current={current} />
+          <AddSheet categories={categories} today={todayIST()} />
+        </div>
       </div>
 
       <QuickAdd />
@@ -56,7 +60,10 @@ export default async function MoneyPage({ searchParams }: { searchParams: Promis
         <section id="to-sort" className="space-y-3">
           <div className="flex items-baseline justify-between">
             <h2 className="font-semibold">To sort <span className="text-sm font-normal text-slate-400">{review.count}</span></h2>
-            {review.count > review.items.length && <Link href="/money/review" className="text-sm text-brand-600 hover:underline">Sort all {review.count} →</Link>}
+            <div className="flex items-center gap-3">
+              <ResortButton className="text-xs text-slate-500 hover:text-slate-800" />
+              {review.count > review.items.length && <Link href="/money/review" className="text-sm text-brand-600 hover:underline">Sort all {review.count} →</Link>}
+            </div>
           </div>
           <ReviewList categories={categories} items={review.items} />
         </section>
@@ -142,23 +149,64 @@ export default async function MoneyPage({ searchParams }: { searchParams: Promis
           )}
 
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-            <h2 className="mb-3 font-semibold">Money in</h2>
-            {s.incomeCats.length ? (
-              <ul className="space-y-1.5 text-sm">
-                {s.incomeCats.map((c) => (
-                  <li key={`${c.id}-${c.name}`} className="flex justify-between gap-2"><span>{c.emoji} {c.name}</span><span className="font-medium tabular-nums">{rupees(c.amount)}</span></li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-slate-500">Nothing yet.</p>
+            <h2 className="mb-3 font-semibold">Income</h2>
+            <ul className="space-y-1.5 text-sm">
+              {([["creator", "💼 Creator"], ["freelance", "🧑‍💻 Freelance"], ["other", "💰 Other"]] as const).map(([k, label]) => (
+                <li key={k} className="flex justify-between gap-2"><span>{label}</span><span className={`tabular-nums ${s.streams[k] ? "font-medium" : "text-slate-400"}`}>{rupees(s.streams[k])}</span></li>
+              ))}
+            </ul>
+            {s.incomeCats.some((c) => c.id === "none") && (
+              <Link href="/money/review" className="mt-2 block text-xs text-amber-700 hover:underline">
+                Includes {rupees(s.incomeCats.find((c) => c.id === "none")!.amount)} of money in that isn&apos;t sorted yet →
+              </Link>
             )}
-            {(owedToYou > 0 || cashGap > 0) && (
-              <div className="mt-4 space-y-1 border-t border-slate-100 pt-3 text-sm">
-                {owedToYou > 0 && <Link href="/money/lending" className="flex justify-between hover:underline"><span>🤝 Lent this month (not back yet)</span><span className="tabular-nums">{rupees(owedToYou)}</span></Link>}
-                {cashGap > 0 && <p className="text-xs text-amber-700">🏧 {rupees(cashGap)} of cash withdrawn isn&apos;t accounted for — type cash spends like &quot;200 chai cash&quot;.</p>}
-              </div>
-            )}
+            {cashGap > 0 && <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-amber-700">🏧 {rupees(cashGap)} of cash withdrawn isn&apos;t accounted for — type cash spends like &quot;200 chai cash&quot;.</p>}
           </section>
+
+          {(s.family.gave > 0 || s.family.got > 0) && (
+            <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+              <div className="mb-3 flex items-baseline justify-between">
+                <h2 className="font-semibold">👨‍👩‍👧 Family</h2>
+                <span className="text-xs text-slate-400">not counted as spending or income</span>
+              </div>
+              <div className="flex justify-between text-sm"><span>You gave</span><span className="tabular-nums">{rupees(s.family.gave)}</span></div>
+              <div className="flex justify-between text-sm"><span>You got</span><span className="tabular-nums">{rupees(s.family.got)}</span></div>
+              {s.family.people.length > 1 && (
+                <ul className="mt-2 space-y-0.5 border-t border-slate-100 pt-2 text-xs text-slate-500">
+                  {s.family.people.map((p) => (
+                    <li key={p.name} className="flex justify-between gap-2"><span>{p.name}</span><span className="tabular-nums">{p.gave ? `gave ${rupees(p.gave)}` : ""}{p.gave && p.got ? " · " : ""}{p.got ? `got ${rupees(p.got)}` : ""}</span></li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+
+          {(s.lendingPeople.length > 0 || s.passThrough.count > 0) && (
+            <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+              {s.lendingPeople.length > 0 && (
+                <>
+                  <Link href="/money/lending" className="mb-2 flex items-baseline justify-between hover:underline">
+                    <h2 className="font-semibold">🤝 Lending this month</h2>
+                    <span className="text-xs text-brand-600">All →</span>
+                  </Link>
+                  <ul className="space-y-1 text-sm">
+                    {s.lendingPeople.map((p) => (
+                      <li key={p.name} className="flex justify-between gap-2">
+                        <span>{p.name}</span>
+                        <span className={`tabular-nums ${p.balance > 0 ? "text-amber-700" : "text-violet-700"}`}>{p.balance > 0 ? `owes you ${rupees(p.balance)}` : `you owe ${rupees(-p.balance)}`}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {s.passThrough.count > 0 && (
+                <Link href={`/money/transactions?month=${ym}&kind=passthrough`} className={`flex justify-between gap-2 text-sm hover:underline ${s.lendingPeople.length ? "mt-3 border-t border-slate-100 pt-3" : ""}`}>
+                  <span>🔀 Passed through (not counted)</span>
+                  <span className="tabular-nums text-slate-500">{rupees(s.passThrough.in)} in · {rupees(s.passThrough.out)} out</span>
+                </Link>
+              )}
+            </section>
+          )}
         </div>
       </div>
 
@@ -179,7 +227,7 @@ export default async function MoneyPage({ searchParams }: { searchParams: Promis
                   {t.direction === "debit" ? "−" : "+"}{rupees(t.amount)}
                 </span>
                 <div className="col-span-2 sm:col-span-1">
-                  <InlineCategory transactionId={t.id} categories={categories} value={t.category?.id ?? null} />
+                  <InlineCategory transactionId={t.id} categories={categories} direction={t.direction} value={t.category?.id ?? null} />
                 </div>
               </li>
             ))}

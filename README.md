@@ -82,7 +82,16 @@ Your private workspace for creator deals and (soon) personal finances.
   - money lent and not back after 30 days
   - monthly payments hiding outside Subscriptions
   - a category much higher than usual this month
-- **AI memory**: tell the assistant lasting facts ("Pankaj is my landlord") and it uses them in every answer. You can see, add and delete them under More → AI memory.
+- **How money is counted**:
+  - **Categories fit a direction**: spending only for money out, income only for money in. Family, lending, transfers and pass-through work both ways.
+  - **Income has four streams**: Creator, Freelance, Sajilo (kept separate) and Other (interest, investment returns, refunds).
+  - **Family** is a two-way bucket ("gave / got", per person), never counted as spending or income.
+  - **Lending & borrowing**, per person: Lent money / Paid back a loan (out), Money returned / Borrowed (in). Each person shows "owes you" or "you owe"; **Fix the balance** adds an opening balance for anything from before your statements.
+  - **Pass-through**: money that came in only to go out again (received for a friend, a reversed payment, a client reimbursing you). The app suggests the pairs, including one-in-several-out to the same person, and they count as neither.
+  - **Studio & equipment** is a creator business cost; camera EMI is EMI & loans.
+  - **+ Add** on Money adds any entry, offering only the categories that fit.
+  - **Re-sort my transactions** (on Money and Sort) re-sorts everything you haven't set yourself, using your rules, memory, clear patterns and the AI. Anything unclear stays for you, and it can be undone.
+- **AI memory**: tell the assistant lasting facts ("Ravi is my landlord") and it uses them in every answer. You can see, add and delete them under More → AI memory.
 - Sajilo money has its own categories (income, expenses, reimbursements) and is kept out of your personal totals.
 
 ---
@@ -102,6 +111,7 @@ Your private workspace for creator deals and (soon) personal finances.
    - Phase 5: `20261104000000_phase5_assistant.sql`
    - Safety net: `20261105000000_safety_net.sql`
    - Suggestions & memory: `20261106000000_suggestions_memory.sql`
+   - Money model: `20261107000000_money_model.sql`
 
    The app's **Setup check** page (`/setup`) shows which ones are still missing.
 

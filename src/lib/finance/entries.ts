@@ -1,4 +1,5 @@
 import "server-only";
+import { fitsDirection } from "./categories";
 import type { DB } from "@/app/actions/helpers";
 import { addDays } from "@/lib/format";
 import { round2 } from "@/lib/money";
@@ -25,6 +26,12 @@ export async function addEntry(supabase: DB, e: {
   note?: string | null;
   source: "manual" | "telegram";
 }): Promise<{ id: string; matchedTo: { id: string; description: string } | null }> {
+  if (e.categoryId) {
+    // A category that points the other way is dropped (the entry goes to "To sort").
+    const cats = await ensureCategories(supabase);
+    const c = cats.find((x) => x.id === e.categoryId);
+    if (!c || !fitsDirection(c, e.direction)) e = { ...e, categoryId: null };
+  }
   const { data: row, error } = await supabase
     .from("transactions")
     .insert({
@@ -111,6 +118,10 @@ export async function applyCategory(supabase: DB, input: SetCategoryInput): Prom
     .single();
   if (error || !t) return { error: "Transaction not found." };
   if (input.categoryId && !categories.some((c) => c.id === input.categoryId)) return { error: "Unknown category." };
+  const chosen = categories.find((c) => c.id === input.categoryId);
+  if (chosen && !fitsDirection(chosen, t.direction as "debit" | "credit")) {
+    return { error: `“${chosen.name}” is for money ${chosen.direction === "out" ? "going out" : "coming in"}, but this was money ${t.direction === "debit" ? "going out" : "coming in"}.` };
+  }
 
   const update: { category_id: string | null; category_source: "user"; category_reason: string; needs_review: boolean; review_reason: null; note?: string | null; person?: string | null } = {
     category_id: input.categoryId,
@@ -136,7 +147,7 @@ export async function applyCategory(supabase: DB, input: SetCategoryInput): Prom
     else await supabase.from("category_rules").insert({ pattern, direction: t.direction, category_id: input.categoryId });
 
     // Apply to past transactions that you haven't set by hand.
-    const lendingPerson = categories.find((c) => c.id === input.categoryId)?.kind === "lending" ? (update.person ?? t.person) : null;
+    const lendingPerson = ["lending", "family"].includes(categories.find((c) => c.id === input.categoryId)?.kind ?? "") ? (update.person ?? t.person) : null;
     const { data: others } = await supabase
       .from("transactions")
       .select("id, category_id, description, counterparty, upi_id, note, person")

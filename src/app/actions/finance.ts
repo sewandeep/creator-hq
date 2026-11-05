@@ -226,3 +226,84 @@ export async function deleteRule(id: string) {
   if (error) throw new Error(error.message);
   refreshAll();
 }
+
+/** The "+ Add" sheet: one entry, any direction, with Undo. */
+export async function addEntryQuick(input: {
+  amount: number;
+  direction: "debit" | "credit";
+  description: string;
+  date: string;
+  categoryId: string | null;
+  person: string | null;
+  note: string | null;
+  isCash: boolean;
+}): Promise<{ error?: string; groupId?: string; message?: string }> {
+  const { supabase } = await requireUser();
+  if (!(input.amount > 0)) return { error: "Enter an amount." };
+  if (!input.description.trim()) return { error: "Say what it was." };
+  try {
+    const r = await addEntry(supabase, {
+      amount: input.amount,
+      direction: input.direction,
+      description: input.description.trim().slice(0, 300),
+      date: /^\d{4}-\d{2}-\d{2}$/.test(input.date) ? input.date : todayIST(),
+      isCash: input.isCash,
+      person: input.person?.trim() || null,
+      categoryId: input.categoryId,
+      note: input.note?.trim() || null,
+      source: "manual",
+    });
+    const { groupId } = await refreshAll();
+    return { groupId, message: r.matchedTo ? `Added — matched to the bank line “${r.matchedTo.description.slice(0, 40)}”.` : "Added." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't add it." };
+  }
+}
+
+/**
+ * "Fix balance" on the Lending page: you say what's actually true today, and
+ * an opening-balance entry (dated before their first entry) makes it add up.
+ * Positive = they owe you; negative = you owe them.
+ */
+export async function setLendingBalance(person: string, actual: number): Promise<{ error?: string; groupId?: string; message?: string }> {
+  const { supabase } = await requireUser();
+  const name = person.trim();
+  if (!name || !Number.isFinite(actual)) return { error: "Enter an amount." };
+  const categories = await ensureLendingCategories(supabase);
+  const ids = categories.map((c) => c.id);
+  const { data } = await supabase.from("transactions").select("txn_date, amount, direction, source, matched_txn_id").in("category_id", ids).ilike("person", name);
+  const rows = (data ?? []).filter((t) => !(t.source !== "statement" && t.matched_txn_id));
+  const current = rows.reduce((s, t) => s + (t.direction === "debit" ? Number(t.amount) : -Number(t.amount)), 0);
+  const diff = Math.round((actual - current) * 100) / 100;
+  if (Math.abs(diff) < 0.5) return { message: "Already right." };
+  const first = rows.map((t) => t.txn_date).sort()[0] ?? todayIST();
+  const cat = categories.find((c) => c.name === (diff > 0 ? "Lent money" : "Borrowed"));
+  try {
+    await addEntry(supabase, {
+      amount: Math.abs(diff),
+      direction: diff > 0 ? "debit" : "credit",
+      description: `Opening balance with ${name} (before these records)`,
+      date: addDaysIso(first, -1),
+      isCash: true,
+      person: name,
+      categoryId: cat?.id ?? null,
+      note: "Balance set by you",
+      source: "manual",
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Couldn't save." };
+  }
+  const { groupId } = await refreshAll();
+  return { groupId, message: actual === 0 ? `${name}: settled.` : actual > 0 ? `${name} owes you ${actual}.` : `You owe ${name} ${-actual}.` };
+}
+
+async function ensureLendingCategories(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"]) {
+  const { ensureCategories } = await import("@/lib/finance/categories-server");
+  return (await ensureCategories(supabase)).filter((c) => c.kind === "lending");
+}
+
+function addDaysIso(iso: string, days: number) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}

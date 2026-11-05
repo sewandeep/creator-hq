@@ -44,6 +44,11 @@ export function ReviewCard({ t, categories, quick }: { t: ReviewTxn; categories:
       setMsg("Pick a category first.");
       return;
     }
+    if (categories.find((c) => c.id === id)?.kind === "lending" && !person.trim()) {
+      setCategoryId(id);
+      setMsg("Who was this with? Add their name, then Save.");
+      return;
+    }
     // Done on screen straight away; the save happens in the background.
     setCategoryId(id);
     setDone(true);
@@ -118,8 +123,8 @@ export function ReviewCard({ t, categories, quick }: { t: ReviewTxn; categories:
           <button
             key={c.id}
             type="button"
-            onClick={() => save(c.id)}
-            title="Tap to save"
+            onClick={() => (c.kind === "lending" || c.kind === "family" ? setCategoryId(c.id) : save(c.id))}
+            title={c.kind === "lending" || c.kind === "family" ? "Then add who it was" : "Tap to save"}
             className={`rounded-full px-2.5 py-1 text-xs ${categoryId === c.id ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
           >
             {c.emoji} {c.name}
@@ -127,9 +132,9 @@ export function ReviewCard({ t, categories, quick }: { t: ReviewTxn; categories:
         ))}
       </div>
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
-        <CategorySelect categories={categories} value={categoryId} onChange={setCategoryId} placeholder="All categories…" />
+        <CategorySelect categories={categories} direction={t.direction} value={categoryId} onChange={setCategoryId} placeholder="All categories…" />
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional) — e.g. dinner with friends" className="input" />
-        {chosen?.kind === "lending" && <input value={person} onChange={(e) => setPerson(e.target.value)} placeholder="Who? (e.g. Rahul)" className="input" />}
+        {(chosen?.kind === "lending" || chosen?.kind === "family") && <input value={person} onChange={(e) => setPerson(e.target.value)} placeholder={chosen?.kind === "family" ? "Who in the family? (e.g. Dad)" : "Who? (e.g. Rahul)"} className="input" />}
       </div>
       {t.source === "statement" && (
         <label className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">

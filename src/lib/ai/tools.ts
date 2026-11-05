@@ -48,7 +48,7 @@ export const TOOL_DECLARATIONS = [
   {
     name: "remember_fact",
     description: "Save a lasting fact or preference the user told you (who someone is, how to treat a payee, their usual rates…), so you know it next time. Saved straight away; the user can see and delete it under AI memory.",
-    parameters: obj({ fact: S("one short sentence, e.g. 'Ramesh Thapa is a Sajilo supplier — payments to him are Sajilo expenses'") }, ["fact"]),
+    parameters: obj({ fact: S("one short sentence, e.g. 'Ramesh is a Sajilo supplier — payments to him are Sajilo expenses'") }, ["fact"]),
   },
 
   // ---- Propose: changes the user must confirm ----
@@ -163,6 +163,10 @@ const TOOLS: Record<string, (a: Args, c: ToolContext) => Promise<Record<string, 
       left_over: round2(s.income - s.spent - s.invested),
       spending_by_category: s.spendingCats.map((c) => ({ category: c.name, amount: round2(c.amount), count: c.count })),
       income_by_category: s.incomeCats.map((c) => ({ category: c.name, amount: round2(c.amount) })),
+      income_by_stream: { creator: round2(s.streams.creator), freelance: round2(s.streams.freelance), other: round2(s.streams.other) },
+      family_not_counted: { gave: round2(s.family.gave), got: round2(s.family.got), people: s.family.people },
+      lending_this_month_by_person: s.lendingPeople.map((p) => ({ person: p.name, balance: round2(p.balance), meaning: p.balance > 0 ? "owes the user" : "the user owes them" })),
+      pass_through_not_counted: { in: round2(s.passThrough.in), out: round2(s.passThrough.out) },
       top_payees: s.topPayees.map((p) => ({ payee: p.name, amount: round2(p.amount), times: p.count })),
       lent: s.lent,
       got_back: s.returned,
@@ -287,7 +291,7 @@ const TOOLS: Record<string, (a: Args, c: ToolContext) => Promise<Record<string, 
     for (const t of data ?? []) {
       if (t.source !== "statement" && t.matched_txn_id) continue;
       const n = t.person?.trim() || "Not named yet";
-      const p = per.get(n) ?? { owes_you: 0, last: t.txn_date };
+      const p = per.get(n) ?? { owes_you: 0, last: t.txn_date }; // negative owes_you = the user owes them
       p.owes_you = round2(p.owes_you + (t.direction === "debit" ? Number(t.amount) : -Number(t.amount)));
       if (t.txn_date > p.last) p.last = t.txn_date;
       per.set(n, p);

@@ -9,7 +9,7 @@ export function CategoryEditor({
   categories,
   defaultPattern,
 }: {
-  t: { id: string; category_id: string | null; note: string | null; person: string | null; source: string };
+  t: { id: string; category_id: string | null; note: string | null; person: string | null; source: string; direction: string };
   categories: Cat[];
   defaultPattern: string;
 }) {
@@ -24,9 +24,9 @@ export function CategoryEditor({
 
   return (
     <div className="space-y-3">
-      <CategorySelect categories={categories} value={categoryId} onChange={setCategoryId} />
+      <CategorySelect categories={categories} direction={t.direction === "credit" ? "credit" : "debit"} value={categoryId} onChange={setCategoryId} />
       <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note — what was this?" className="input" />
-      {(kind === "lending" || person) && <input value={person} onChange={(e) => setPerson(e.target.value)} placeholder="Person" className="input" />}
+      {(kind === "lending" || kind === "family" || person) && <input value={person} onChange={(e) => setPerson(e.target.value)} placeholder={kind === "family" ? "Who in the family? (e.g. Dad)" : "Person"} className="input" />}
       {t.source === "statement" && (
         <label className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
           <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />

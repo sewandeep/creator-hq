@@ -7,9 +7,10 @@ export const metadata: Metadata = { title: "Suggestions" };
 
 const GROUPS = [
   { type: "income", label: "Brand money to link" },
+  { type: "passthrough", label: "Money just passing through?" },
   { type: "recat", label: "Probably the wrong category" },
   { type: "duplicate", label: "Possible double charges" },
-  { type: "lending", label: "Money you're owed" },
+  { type: "lending", label: "Lending & borrowing" },
   { type: "subscription", label: "Monthly payments" },
   { type: "spike", label: "Spending this month" },
 ] as const;

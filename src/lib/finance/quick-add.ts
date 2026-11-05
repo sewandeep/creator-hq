@@ -4,6 +4,8 @@
 //   "lent 2000 to rahul"   → ₹2,000 lent to Rahul
 //   "rahul returned 2000"  → ₹2,000 returned by Rahul
 //   "got 5000 from priya"  → ₹5,000 received
+//   "borrowed 3000 from amit" / "paid back 3000 to amit"
+//   "gave 2000 to dad"     → Family (its own two-way bucket)
 //   "1.2k groceries yesterday"
 // Shared by the web quick-add box and the Telegram bot (Phase 4).
 
@@ -32,9 +34,11 @@ const KEYWORDS: [RegExp, string][] = [
   [/\b(gift|donation|charity)\b/, "Gifts & donations"],
   [/\b(mom|mum|dad|papa|mummy|family|home)\b/, "Family"],
   [/\b(sip|mutual fund|stocks?|shares|zerodha|groww|fd|ppf)\b/, "Investments"],
-  [/\b(props?|shoot|camera|mic|lens|ring ?light|editing|editor|tripod|studio)\b/, "Creator work expenses"],
+  [/\b(camera|mic|lens|ring ?light|lights?|tripod|gimbal|studio|backdrop|softbox)\b/, "Studio & equipment"],
+  [/\b(props?|shoot|editing|editor)\b/, "Creator work expenses"],
   [/\b(course|class|books?|tuition)\b/, "Education"],
   [/\b(emi|loan)\b/, "EMI & loans"],
+  [/\b(freelance|client)\b/, "Freelance income"],
 ];
 
 function iso(d: Date) {
@@ -105,22 +109,32 @@ export function parseQuickEntry(raw: string, today: string): QuickEntry | null {
   let person: string | null = null;
   let categoryHint: string | null = null;
 
+  const borrowed = rest.match(/\bborrow(?:ed)?\b(?: (?:from )?([a-z]+))?/);
+  const paidBack = rest.match(/\b(?:paid back|repaid|returned|gave back|back) to ([a-z]+)/);
   const lent = rest.match(/\b(?:lent|lend|gave|given)\b(?: (?:to )?([a-z]+))?/);
   const returned = rest.match(/\b([a-z]+) (?:returned|paid back|gave back|repaid)\b|\b(?:returned|paid back|repaid|got back) (?:by |from )?([a-z]+)?/);
   if (/^\+/.test(original) || /\b(got|received|credited|income|salary|refund|cashback)\b/.test(rest)) direction = "credit";
 
-  if (returned) {
+  if (borrowed) {
+    direction = "credit";
+    person = borrowed[1] ?? rest.match(/\bfrom ([a-z]+)/)?.[1] ?? null;
+    categoryHint = "Borrowed";
+  } else if (paidBack) {
+    direction = "debit";
+    person = paidBack[1];
+    categoryHint = "Paid back a loan";
+  } else if (returned) {
     direction = "credit";
     person = returned[1] ?? returned[2] ?? null;
     categoryHint = "Money returned";
-  } else if (lent) {
+  } else if (lent && !/\b(mom|mum|dad|papa|mummy|family|home)\b/.test(rest)) {
     direction = "debit";
     person = lent[1] ?? rest.match(/\bto ([a-z]+)/)?.[1] ?? null;
     categoryHint = "Lent money";
   } else {
     const who = direction === "credit" ? rest.match(/\bfrom ([a-z]+)/) : rest.match(/\bto ([a-z]+)/);
     if (who) person = who[1];
-    if (direction === "credit" && /\bsalary\b/.test(rest)) categoryHint = "Salary & other income";
+    if (direction === "credit" && /\bsalary\b/.test(rest)) categoryHint = "Other income";
     else if (direction === "credit" && /\b(refund|cashback)\b/.test(rest)) categoryHint = "Refunds & cashback";
     else categoryHint = KEYWORDS.find(([re]) => re.test(rest))?.[1] ?? null;
   }

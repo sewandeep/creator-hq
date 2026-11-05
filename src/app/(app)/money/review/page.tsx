@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ResortButton } from "../resort-button";
 import Link from "next/link";
 import { Empty, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
@@ -18,7 +19,12 @@ export default async function ReviewPage() {
       <PageHeader
         title="Sort transactions"
         subtitle={count ? `${count} the AI wasn't sure about. Tap a category — tick "Always use" and it remembers.` : "All caught up."}
-        actions={<Link href="/money" className="btn-secondary">Back to Money</Link>}
+        actions={
+          <>
+            <ResortButton />
+            <Link href="/money" className="btn-secondary">Back to Money</Link>
+          </>
+        }
       />
       {!items.length ? (
         <Empty action={<Link href="/money" className="btn-secondary">Back to Money</Link>}>Nothing to sort. 🎉</Empty>

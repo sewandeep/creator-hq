@@ -43,8 +43,8 @@ export function appUrl() {
   return u.replace(/\/+$/, "");
 }
 
-const QUICK_OUT = ["Food & dining", "Groceries", "Travel & cabs", "Shopping", "Family", "Rent", "Bills & utilities", "Lent money", "Self transfer", "Creator work expenses"];
-const QUICK_IN = ["Creator income", "Salary & other income", "Money returned", "Refunds & cashback", "Self transfer", "Interest"];
+const QUICK_OUT = ["Food & dining", "Groceries", "Fuel", "Travel & cabs", "Studio & equipment", "EMI & loans", "Family", "Lent money", "Self transfer", "Pass-through"];
+const QUICK_IN = ["Creator income", "Freelance income", "Sajilo income", "Other income", "Family", "Money returned", "Borrowed", "Self transfer", "Pass-through"];
 
 const HELP = `<b>Here's what I can do</b>
 

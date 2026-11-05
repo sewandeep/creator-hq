@@ -127,6 +127,24 @@ export default async function SetupPage() {
         }
       : { ok: true, title: "Suggestions & AI memory" },
   );
+  const { error: modelError } = await supabase.from("categories").select("direction, stream").limit(0);
+  migrationChecks.push(
+    modelError
+      ? {
+          ok: false,
+          title: "Money model (in/out categories, family, lending, pass-through): database update not applied",
+          detail: (
+            <>
+              Run{" "}
+              <a className="link" href="https://github.com/sewandeep/creator-hq/blob/main/supabase/migrations/20261107000000_money_model.sql" target="_blank" rel="noreferrer">
+                20261107000000_money_model.sql
+              </a>{" "}
+              in the Supabase SQL Editor, then reload this page.
+            </>
+          ),
+        }
+      : { ok: true, title: "Money model — in/out categories, income streams, family, lending, pass-through" },
+  );
   const { error: bucketError } = await supabase.storage.from("deal-files").list("", { limit: 1 });
   const { error: stmtBucketError } = await supabase.storage.from("statements").list("", { limit: 1 });
   const { data: profile } = await supabase.from("profile").select("legal_name, pan, bank_account_number").maybeSingle();
