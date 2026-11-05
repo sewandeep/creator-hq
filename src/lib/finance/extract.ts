@@ -14,6 +14,10 @@ export type AiRow = {
   category: string;
   confidence: number;
   why: string;
+  /** Short purpose printed by the bank (e.g. UPI note) — read by code, not AI. */
+  note?: string | null;
+  /** Where the category came from (set when sorted by memory / patterns / AI-by-payee). */
+  source?: "memory" | "pattern" | "ai";
 };
 
 type AiResult = {

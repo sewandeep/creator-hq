@@ -8,6 +8,8 @@ import { extractWithAi, type AiRow } from "./extract";
 import { AiError } from "./gemini";
 import { PdfPasswordError, extractPdfPages } from "./pdf-text";
 import type { JobCtx } from "@/lib/jobs";
+import { autoCategorize } from "./auto-categorize";
+import { parseKnownStatement } from "./parsers";
 
 export type ProcessResult = {
   status: "done" | "needs_password" | "failed";
@@ -91,8 +93,38 @@ export async function processStatement(supabase: DB, statementId: string, passwo
     await supabase.from("statements").update({ error: `progress: Read part ${done} of ${total}` }).eq("id", statementId);
     await step(`AI read part ${done} of ${total}`);
   };
+  // Banks with a known layout (Kotak) are read by code: instant, free, private.
+  const started = Date.now();
+  const parsed = parseKnownStatement(pages);
+  if (parsed) {
+    ex = {
+      account_last4: parsed.account_last4,
+      period_from: parsed.period_from,
+      period_to: parsed.period_to,
+      opening_balance: parsed.opening_balance,
+      closing_balance: parsed.closing_balance,
+      model: `${parsed.bank} reader (no AI)`,
+      rows: parsed.rows.map(
+        (r): AiRow => ({
+          date: r.date,
+          description: r.description,
+          debit: r.direction === "debit" ? r.amount : 0,
+          credit: r.direction === "credit" ? r.amount : 0,
+          balance: r.balance,
+          reference: r.reference,
+          counterparty: r.counterparty ?? "",
+          upi_id: null,
+          note: r.note ?? null,
+          category: "Uncategorized",
+          confidence: 0,
+          why: "",
+        }),
+      ),
+    };
+    await step(`Read ${parsed.rows.length} transactions with the ${parsed.bank} reader in ${((Date.now() - started) / 1000).toFixed(2)}s — no AI needed`);
+  }
   try {
-    ex =
+    ex ??=
       textLength > 200
         ? await extractWithAi({ pages }, categories.map((c) => c.name), progress)
         : password
@@ -143,6 +175,23 @@ export async function processStatement(supabase: DB, statementId: string, passwo
 
   const dates = rows.map((r) => r.dateIso).sort();
   const rules = await loadRules(supabase);
+
+  // Categories: memory of how you sorted each payee, obvious patterns, then
+  // the AI once for payees it hasn't seen (only for statements read by code —
+  // the AI reader already guessed). Your rules still come first, below.
+  if (fresh.length) {
+    await step(`Sorting ${fresh.length} transaction${fresh.length === 1 ? "" : "s"} into categories`);
+    const { data: owner } = await supabase.from("profile").select("legal_name, display_name").maybeSingle();
+    const stats = await autoCategorize(supabase, fresh.map((k) => k.r), {
+      categories,
+      rules,
+      useAi: Boolean(parsed),
+      ownerName: [owner?.legal_name, owner?.display_name].filter(Boolean).join(","),
+      step,
+    });
+    const known = stats.rule + stats.memory + stats.pattern;
+    await step(`${known} sorted from your rules and memory${stats.ai ? `, ${stats.ai} by AI` : ""}${stats.unsure ? `, ${stats.unsure} for you to say` : ""}`);
+  }
   const manual = await loadUnmatchedManual(supabase, dates[0], dates[dates.length - 1]);
   const invoices = await loadOpenInvoices(supabase);
   const taken = new Set<string>();
@@ -156,7 +205,7 @@ export async function processStatement(supabase: DB, statementId: string, passwo
     let category_reason = "";
     let needs_review = false;
     let review_reason: string | null = null;
-    let note: string | null = null;
+    let note: string | null = r.note ?? null;
     let person: string | null = null;
     let suggested_invoice_id: string | null = null;
 
@@ -177,6 +226,19 @@ export async function processStatement(supabase: DB, statementId: string, passwo
       category_source = "rule";
       category_reason = `Your rule: anything containing "${rule.pattern}"`;
       ruleHits.set(rule.id, (ruleHits.get(rule.id) ?? 0) + 1);
+    } else if (r.source === "memory" || r.source === "pattern") {
+      const cat = catByName.get(r.category.toLowerCase());
+      category_id = cat?.id ?? null;
+      category_source = cat ? "rule" : "none";
+      category_reason = r.source === "memory" ? `Remembered: ${r.why}` : r.why;
+      if (!cat || r.confidence < REVIEW_BELOW) {
+        needs_review = true;
+        review_reason = /sajilo/i.test(r.category) ? "From Sajilo — Sajilo income, a reimbursement, or something else?" : cat ? `Probably ${cat.name} — right?` : "What was this for?";
+      }
+      if (cat?.kind === "lending") {
+        needs_review = true;
+        review_reason = "Who was this with?";
+      }
     } else {
       const cat = catByName.get(r.category.toLowerCase());
       category_id = cat?.id ?? null;

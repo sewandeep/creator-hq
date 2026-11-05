@@ -31,7 +31,8 @@ export async function readStatement(
 
   // Up to ~6 minutes; a missed check (phone asleep, network blip) just tries again.
   for (let i = 0; i < 180; i++) {
-    await new Promise((r) => setTimeout(r, 2000));
+    // Check quickly at first — statements read by code finish in about a second.
+    await new Promise((r) => setTimeout(r, i === 0 ? 600 : i < 3 ? 1000 : 2000));
     const s = await fetch(`/api/statements/${id}/status`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
     onWaiting?.((i + 1) * 2, s?.progress ?? null);
     if (s && s.status !== "processing") return s as StatementResult;

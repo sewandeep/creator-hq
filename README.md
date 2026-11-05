@@ -63,6 +63,13 @@ Your private workspace for creator deals and (soon) personal finances.
 - Taps update the screen at once and save in the background. A small "Saved · Undo" message confirms each one; if a save fails, the screen goes back and tells you why.
 - Main tabs are loaded ahead, so switching between Today, Work, Money and Reports is instant.
 - Voice notes are turned into text by Groq (free), so iPhone recordings work.
+- **Kotak statements are read by the app's own code**: no AI, done in about a second, private, and every row is checked against the running balance. Other banks (SBI and the rest) still go to the AI.
+- **Categories come from memory first**, in this order:
+  1. your "always use" rules
+  2. how you sorted the same payee before
+  3. obvious patterns (bank charges, ATM, Zomato, petrol, Jio, SIPs, your own transfers, Sajilo)
+  4. only then the AI, asked once with the list of new payees
+- Every payee you sort makes the next statement smarter.
 - Sajilo money has its own categories (income, expenses, reimbursements) and is kept out of your personal totals.
 
 ---
