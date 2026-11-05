@@ -88,7 +88,7 @@ export async function runAssistant(
   contents.push({ role: "user", parts: userParts });
 
   const ctx: ToolContext = { db, userId, files: prepared.refs, channel: input.channel, proposals: [] };
-  const snapshot = await buildSnapshot(db, userId).catch(() => "");
+  const snapshot = (await buildSnapshot(db, userId).catch(() => "")).slice(0, 1500);
   const system = `${systemPrompt(profile?.display_name || profile?.legal_name || "")}${snapshot ? `\n\nWhere things stand right now (answer from this directly when it's enough; use tools for anything more detailed):\n${snapshot}` : ""}`;
   let reply = "";
   let model = "";
@@ -100,7 +100,7 @@ export async function runAssistant(
   if (isGroqConfigured() && textOnly) {
     try {
       const userText = userParts.map((p) => p.text ?? "").filter(Boolean).join("\n\n");
-      const recent = (history ?? []).slice(0, 6).reverse().map((m): ChatMsg => ({ role: m.role === "user" ? "user" : "assistant", content: m.content.slice(0, 800) }));
+      const recent = (history ?? []).slice(0, 4).reverse().map((m): ChatMsg => ({ role: m.role === "user" ? "user" : "assistant", content: m.content.slice(0, 500) }));
       const r = await groqAssistant({ system, recent, userText, ctx, step, partial: (t) => input.job?.partial?.(t) });
       reply = r.reply;
       model = r.model;
@@ -108,7 +108,7 @@ export async function runAssistant(
     } catch (e) {
       if (!(e instanceof GroqUnavailable)) throw e;
       console.warn("groq unavailable, using gemini", e.message);
-      await step("The fast AI is busy — switching to Gemini");
+      await step(`Fast AI (Groq) didn't work — ${e.message.slice(0, 140)} — switching to Gemini`);
       input.job?.partial?.("");
     }
   }
@@ -244,3 +244,29 @@ function toolLabel(name: string, args: Record<string, unknown>) {
 
 export const RUNDOWN_PROMPT =
   "Give me my weekly rundown: what happened with brand deals this past week (new, moved, paid), money in and out this month so far with the biggest spending categories, invoices still unpaid, who owes me, and what's coming up in the next 7 days. Finish with 1–3 short, specific suggestions. Use short bullets.";
+
+/**
+ * Setup check: one real question to Groq with the assistant's full set of
+ * tools and data summary — reports the exact answer or error per model.
+ */
+export async function testFastAssistant(db: DB, userId: string): Promise<{ ok: boolean; lines: string[] }> {
+  if (!isGroqConfigured()) return { ok: false, lines: ["GROQ_API_KEY isn't set in Vercel."] };
+  const snapshot = (await buildSnapshot(db, userId).catch(() => "")).slice(0, 1500);
+  const system = `${systemPrompt("")}\n\nWhere things stand right now:\n${snapshot}`;
+  const tools = toOpenAiTools(TOOL_DECLARATIONS);
+  const approxTokens = Math.round((system.length + JSON.stringify(tools).length + 60) / 3.6) + 700;
+  const lines = [`Request size ≈ ${approxTokens.toLocaleString("en-IN")} tokens (free limit: 8,000 a minute).`];
+  let ok = false;
+  for (const model of GROQ_CHAT_MODELS()) {
+    const t0 = Date.now();
+    try {
+      const r = await groqTurn({ model, tools, messages: [{ role: "system", content: system }, { role: "user", content: "How much did I spend last month?" }] });
+      const what = r.toolCalls.length ? `wanted to look up ${r.toolCalls.map((c) => c.function.name).join(", ")}` : `answered: "${r.content.slice(0, 60)}"`;
+      lines.push(`✓ ${model}: ${what} (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
+      ok = true;
+    } catch (e) {
+      lines.push(`✗ ${model}: ${e instanceof Error ? e.message : String(e)} (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
+    }
+  }
+  return { ok, lines };
+}

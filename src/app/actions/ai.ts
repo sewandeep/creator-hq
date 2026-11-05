@@ -57,3 +57,10 @@ export async function testAssistant(): Promise<{ ok: boolean; message: string }>
     return { ok: false, message: e instanceof AiError ? e.message : `Error: ${e instanceof Error ? e.message : String(e)}` };
   }
 }
+
+/** Setup check: one real question to the fast AI (Groq), with the exact result per model. */
+export async function testGroq(): Promise<{ ok: boolean; lines: string[] }> {
+  const { supabase, userId } = await requireUser();
+  const { testFastAssistant } = await import("@/lib/ai/assistant");
+  return testFastAssistant(supabase, userId);
+}

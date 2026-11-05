@@ -59,13 +59,14 @@ export async function callGemini(body: object, preferred: string[] = DEFAULT_MOD
       }
       if (res.status === 429 || res.status === 404 || res.status === 403) break; // over quota / model not available → next model
       if (res.status >= 500) {
-        await new Promise((r) => setTimeout(r, 1500));
+        await new Promise((r) => setTimeout(r, 2000));
         continue;
       }
       break;
     }
   }
   if (/429/.test(lastError)) throw new AiError("The free AI limit is used up for now. Try again in a few minutes (or tomorrow).");
+  if (/^5\d\d|UNAVAILABLE|overloaded|high demand/i.test(lastError)) throw new AiError("Gemini (the backup AI) is overloaded right now — that's on Google's side and usually passes in a few minutes. Please try again shortly.");
   if (/no answer within/.test(lastError)) throw new AiError(`Gemini is very slow right now (${lastError}). Try again in a minute.`);
   throw new AiError(`The AI couldn't answer. ${lastError}`);
 }

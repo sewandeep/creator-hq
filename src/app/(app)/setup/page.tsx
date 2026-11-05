@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { isEmailConfigured } from "@/lib/email";
-import { AiTest } from "./ai-test";
+import { AiTest, GroqTest } from "./ai-test";
 
 export const metadata: Metadata = { title: "Setup check" };
 
@@ -122,7 +122,7 @@ export default async function SetupPage() {
       ? { ok: false, title: "Statement storage", detail: `Storage for bank statements isn't ready: ${stmtBucketError.message}. Run the Phase 3 file in the SQL Editor.` }
       : { ok: true, title: "Statement storage" },
     process.env.GROQ_API_KEY
-      ? { ok: true, title: "Voice notes (Groq key)" }
+      ? { ok: true, title: "Fast AI & voice notes (Groq key)", detail: <GroqTest /> }
       : { ok: false, warn: true, title: "Voice notes (Groq key)", detail: <>Not added yet — get a free key at <b>console.groq.com</b> → API Keys, add it in Vercel as <code className="rounded bg-slate-100 px-1">GROQ_API_KEY</code>, then redeploy.</> },
     process.env.GEMINI_API_KEY
       ? { ok: true, title: "AI (Gemini key)", detail: <AiTest /> }

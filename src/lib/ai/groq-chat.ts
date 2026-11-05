@@ -55,18 +55,25 @@ export async function groqTurn(opts: {
     tool_choice: "auto",
     temperature: 0.3,
     stream: true,
-    max_completion_tokens: 1500,
+    max_completion_tokens: 700, // reserved tokens count against the free per-minute limit
   };
   if (/gpt-oss/.test(opts.model)) body.reasoning_effort = "low";
 
-  const ctrl = AbortSignal.timeout(opts.timeoutMs ?? 45_000);
+  // Give up quickly if Groq doesn't start answering (20s), stalls mid-answer
+  // (20s), or takes too long overall — the app then switches to Gemini.
+  const abort = new AbortController();
+  const overall = setTimeout(() => abort.abort(), opts.timeoutMs ?? 60_000);
+  let idle = setTimeout(() => abort.abort(), 20_000);
+  const ctrl = abort.signal;
   let res = await fetch(`${BASE}/chat/completions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify(body),
     signal: ctrl,
   }).catch((e: unknown) => {
-    throw new GroqUnavailable(e instanceof Error ? e.message : String(e));
+    clearTimeout(overall);
+    clearTimeout(idle);
+    throw new GroqUnavailable(e instanceof Error && e.name === "AbortError" ? "no answer within 20 seconds" : e instanceof Error ? e.message : String(e));
   });
   if (res.status === 400) {
     const text = await res.text();
@@ -75,7 +82,18 @@ export async function groqTurn(opts: {
       res = await fetch(`${BASE}/chat/completions`, { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctrl });
     } else throw new GroqUnavailable(`400: ${text.slice(0, 200)}`);
   }
-  if (!res.ok || !res.body) throw new GroqUnavailable(`${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
+  if (!res.ok || !res.body) {
+    clearTimeout(overall);
+    clearTimeout(idle);
+    const text = await res.text().catch(() => "");
+    let msg = text;
+    try {
+      msg = (JSON.parse(text) as { error?: { message?: string } }).error?.message ?? text;
+    } catch {
+      /* not JSON */
+    }
+    throw new GroqUnavailable(`${res.status}: ${msg.slice(0, 160)}`);
+  }
 
   let content = "";
   const calls: { id: string; name: string; args: string }[] = [];
@@ -86,6 +104,8 @@ export async function groqTurn(opts: {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
+      clearTimeout(idle);
+      idle = setTimeout(() => abort.abort(), 20_000);
       buffer += decoder.decode(value, { stream: true });
       let nl: number;
       while ((nl = buffer.indexOf("\n")) >= 0) {
@@ -117,7 +137,10 @@ export async function groqTurn(opts: {
   } catch (e) {
     if (e instanceof GroqUnavailable) throw e;
     // The connection dropped mid-answer: only a problem if nothing came through.
-    if (!content && !calls.length) throw new GroqUnavailable(e instanceof Error ? e.message : String(e));
+    if (!content && !calls.length) throw new GroqUnavailable(e instanceof Error && e.name === "AbortError" ? "stopped answering for 20 seconds" : e instanceof Error ? e.message : String(e));
+  } finally {
+    clearTimeout(overall);
+    clearTimeout(idle);
   }
   return {
     content,
