@@ -96,11 +96,11 @@ export async function DealPanel({ id, closeHref }: { id: string; closeHref: stri
           <div className="text-sm font-medium text-slate-500">
             {agency && (
               <>
-                <Link href={`/brands/${agency.id}`} className="hover:underline">{agency.name}</Link>
+                <Link href={`/deals?party=${agency.id}`} className="hover:underline">{agency.name}</Link>
                 <span className="mx-1 text-slate-300">›</span>
               </>
             )}
-            <Link href={`/brands/${deal.brand?.id}`} className="hover:underline">{deal.brand?.name}</Link>
+            <Link href={`/deals?party=${deal.brand?.id}`} className="hover:underline">{deal.brand?.name}</Link>
           </div>
           <h2 className="text-xl font-semibold tracking-tight">
             <InlineField key={`t-${deal.title}`} dealId={id} field="title" value={deal.title} />

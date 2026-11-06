@@ -91,12 +91,12 @@ Your private workspace for creator deals and (soon) personal finances.
   - **Studio & equipment** is a creator business cost; camera EMI is EMI & loans.
   - **+ Add** on Money adds any entry, offering only the categories that fit.
   - **Re-sort my transactions** (on Money and Sort) re-sorts everything you haven't set yourself, using your rules, memory, clear patterns and the AI. Anything unclear stays for you, and it can be undone.
-- **Work, by agency and brand**:
-  - two tabs: **Agencies** (with their brand deals inside) and **Brands** (deals done directly), each filtered by **Ongoing / Done / Lost / All**
-  - each agency or brand has a rule, **"Does it cut TDS?"** (10%, 2% or none), which new deals copy and which you can change per deal
-  - any brand can be marked **"This is an agency"**, and the deal's **Brand** field then sets the real brand
-  - **inside a deal:** brand, agency and TDS; the invoice (addressed to the agency or the brand, with simple editing of lines and dates, plus PDF and Send); and **payments**, any number of them (advance, second part, final), added from your bank lines or by hand
-  - **TDS stays simple:** if a deal has TDS on, money that arrives counts as already after TDS (₹27,000 at 10% = ₹30,000 fee + ₹3,000 TDS), and the deal is paid once the payments add up
+- **Work, simplified**:
+  - **Sidebar:** All deals · New leads · Ongoing · Done · Lost, then every **agency** and every **brand** (direct) by name
+  - **All deals** shows each agency with all its deals underneath ("Brand — deal"), then your direct brands the same way
+  - **An agency's page** shows the **agency's** details (legal name, PAN, TAN, GSTIN, address, website, notes, people), all editable in place, plus its TDS rule and its deals grouped by brand. A brand's page works the same way.
+  - **Inside a deal:** brand, agency and TDS; the invoice (addressed to the agency or the brand, simple editing, PDF, Send); and payments, any number of them (advance, parts, final), from your bank lines or added by hand
+  - **TDS stays simple:** if a deal has TDS on, money that arrives counts as already after TDS, and the deal is paid once the payments add up
 - **AI memory**: tell the assistant lasting facts ("Ravi is my landlord") and it uses them in every answer. You can see, add and delete them under More → AI memory.
 - Sajilo money has its own categories (income, expenses, reimbursements) and is kept out of your personal totals.
 

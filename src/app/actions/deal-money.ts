@@ -233,3 +233,19 @@ export async function setDealBrand(dealId: string, brandName: string): Promise<R
   if (error) return { error: error.message };
   return { ...(await refreshAll()), message: moveAgency ? `For ${name} (through the agency)` : `Brand: ${name}` };
 }
+
+const PARTY_FIELDS = ["name", "legal_name", "pan", "tan", "gstin", "billing_address", "website", "instagram", "category", "notes"] as const;
+export type PartyFieldName = (typeof PARTY_FIELDS)[number];
+
+/** Edit one detail of an agency or brand in place. */
+export async function updatePartyField(brandId: string, field: PartyFieldName, value: string): Promise<Result> {
+  const { supabase } = await requireUser();
+  if (!(PARTY_FIELDS as readonly string[]).includes(field)) return { error: "Can't change that." };
+  let v: string | null = value.trim() || null;
+  if (field === "name" && !v) return { error: "The name can't be empty." };
+  if ((field === "pan" || field === "tan" || field === "gstin") && v) v = v.toUpperCase().replace(/\s+/g, "");
+  if (field === "pan" && v && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(v)) return { error: "A PAN looks like ABCDE1234F." };
+  const { error } = await supabase.from("brands").update({ [field]: v } as { name?: string }).eq("id", brandId);
+  if (error) return { error: /duplicate|unique/i.test(error.message) ? "There's already one with that name." : error.message };
+  return { ...(await refreshAll()), message: "Saved" };
+}
