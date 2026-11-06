@@ -57,6 +57,7 @@ export const TOOL_DECLARATIONS = [
     description: "Prepare a new brand deal (or lead) for the user to confirm. Use for brand emails/DMs/briefs.",
     parameters: obj({
       brand: S(),
+      agency: S("the agency it came through, if any (e.g. the agency that emailed) — leave out for direct brand deals"),
       title: S("short campaign name"),
       stage: S("lead, contacted, negotiating, confirmed, in_progress, posted, invoiced, paid"),
       amount: N("fee in rupees before TDS"),

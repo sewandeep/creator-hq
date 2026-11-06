@@ -145,6 +145,24 @@ export default async function SetupPage() {
         }
       : { ok: true, title: "Money model — in/out categories, income streams, family, lending, pass-through" },
   );
+  const { error: agencyError } = await supabase.from("deals").select("agency_id, tds_rate").limit(0);
+  migrationChecks.push(
+    agencyError
+      ? {
+          ok: false,
+          title: "Agencies & deal payments: database update not applied",
+          detail: (
+            <>
+              Run{" "}
+              <a className="link" href="https://github.com/sewandeep/creator-hq/blob/main/supabase/migrations/20261108000000_agencies.sql" target="_blank" rel="noreferrer">
+                20261108000000_agencies.sql
+              </a>{" "}
+              in the Supabase SQL Editor, then reload this page. Until then the Work page can&apos;t load.
+            </>
+          ),
+        }
+      : { ok: true, title: "Agencies & deal payments" },
+  );
   const { error: bucketError } = await supabase.storage.from("deal-files").list("", { limit: 1 });
   const { error: stmtBucketError } = await supabase.storage.from("statements").list("", { limit: 1 });
   const { data: profile } = await supabase.from("profile").select("legal_name, pan, bank_account_number").maybeSingle();

@@ -238,7 +238,7 @@ export function NoteAdder({ dealId }: { dealId: string }) {
 }
 
 /** "+ New deal": describe it to the AI, or fill four quick fields. */
-export function NewDeal({ brands, className = "btn-primary" }: { brands: string[]; className?: string }) {
+export function NewDeal({ brands, agencies = [], className = "btn-primary" }: { brands: string[]; agencies?: string[]; className?: string }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"ai" | "form">("ai");
   const [text, setText] = useState("");
@@ -276,7 +276,7 @@ export function NewDeal({ brands, className = "btn-primary" }: { brands: string[
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   rows={5}
-                  placeholder={'Describe it or paste the brand\'s message, e.g.\n"FanCode, ISL promotion, 1 reel, 5k, already paid"\n"Noise wants 2 reels + 3 stories for 60k, deadline 20 Nov"'}
+                  placeholder={'Describe it or paste the brand\'s message, e.g.\n"FanCode via Agency X, 1 reel, 5k, TDS cut"\n"Noise wants 2 reels + 3 stories for 60k, deadline 20 Nov"'}
                   className="input"
                 />
                 <p className="text-xs text-slate-500">The assistant fills in everything and shows you a card to confirm. To add a brief or contract PDF, drop it into the assistant.</p>
@@ -288,6 +288,11 @@ export function NewDeal({ brands, className = "btn-primary" }: { brands: string[
                   <span className="label">Brand</span>
                   <input name="brand" list="brand-list" required autoFocus placeholder="FanCode" className="input" />
                   <datalist id="brand-list">{brands.map((b) => <option key={b} value={b} />)}</datalist>
+                </label>
+                <label className="block">
+                  <span className="label">Through an agency? (optional)</span>
+                  <input name="agency" list="agency-list" placeholder="Leave empty if direct" className="input" />
+                  <datalist id="agency-list">{agencies.map((b) => <option key={b} value={b} />)}</datalist>
                 </label>
                 <label className="block">
                   <span className="label">What</span>

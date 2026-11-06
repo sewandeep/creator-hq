@@ -16,12 +16,10 @@ export async function linkTxnToInvoice(supabase: DB, transactionId: string, invo
   const { data: inv } = await supabase.from("invoices").select("id, brand_id, deal_id, subtotal, tds_rate, tds_section, payments(gross_amount)").eq("id", invoiceId).single();
   if (!t || !inv) throw new Error("Not found.");
   if (t.payment_id) throw new Error("This is already recorded as a payment.");
-  const balance = round2(Number(inv.subtotal) - inv.payments.reduce((s, p) => s + Number(p.gross_amount), 0));
+  // Simple rule: if this invoice has TDS, what reached the bank came after TDS was cut.
   const net = Number(t.amount);
-  const expectedNet = round2(balance - (balance * Number(inv.tds_rate ?? 0)) / 100);
-  // If what arrived equals "balance minus TDS", the rest is TDS. Otherwise treat it as a plain part-payment.
-  const tds = Math.abs(net - expectedNet) <= 1 ? round2(balance - net) : 0;
-
+  const rate = Number(inv.tds_rate ?? 0);
+  const tds = rate > 0 && rate < 100 ? round2(net / (1 - rate / 100) - net) : 0;
   const { data: pay, error } = await supabase
     .from("payments")
     .insert({ brand_id: inv.brand_id, invoice_id: inv.id, deal_id: inv.deal_id, received_date: t.txn_date, gross_amount: round2(net + tds), tds_amount: tds, tds_section: tds ? inv.tds_section : null, mode: "Bank transfer", reference: t.reference, notes: "Recorded from bank statement" })

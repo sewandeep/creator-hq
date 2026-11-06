@@ -6,7 +6,7 @@ import { STAGE_IDS, type StageId } from "@/lib/constants";
 import { fmtDate, rupees, todayIST } from "@/lib/format";
 import { parseDeliverables } from "@/lib/import";
 import { round2 } from "@/lib/money";
-import { findOrCreateBrand, refreshAll } from "./helpers";
+import { findOrCreateBrand, refreshAll, findOrCreateAgency, startingTdsRate } from "./helpers";
 
 // Small, one-tap actions for the Work screen.
 
@@ -145,7 +145,10 @@ export async function quickCreateDeal(_prev: { error?: string } | undefined, fd:
   let id: string;
   try {
     const brandId = await findOrCreateBrand(supabase, brand);
-    const { data, error } = await supabase.from("deals").insert({ brand_id: brandId, title, amount, stage, due_date: due }).select("id").single();
+    const agencyName = String(fd.get("agency") ?? "").trim();
+    const agency = agencyName ? await findOrCreateAgency(supabase, agencyName) : null;
+    const tdsRate = await startingTdsRate(supabase, brandId, agency);
+    const { data, error } = await supabase.from("deals").insert({ brand_id: brandId, agency_id: agency?.id ?? null, tds_rate: tdsRate, title, amount, stage, due_date: due }).select("id").single();
     if (error) throw error;
     id = data.id;
     if (items.length) {

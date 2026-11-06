@@ -9,7 +9,7 @@ export type DraftItem = { description: string; quantity: string; rate: string };
 export async function itemsFromDeal(supabase: DB, dealId: string) {
   const { data: deal } = await supabase
     .from("deals")
-    .select("id, title, brand_id, amount, platform, deliverables(type, quantity, platform)")
+    .select("id, title, brand_id, agency_id, tds_rate, amount, platform, deliverables(type, quantity, platform)")
     .eq("id", dealId)
     .maybeSingle();
   if (!deal) return null;
@@ -32,21 +32,22 @@ export async function itemsFromDeal(supabase: DB, dealId: string) {
 }
 
 /** Creates a draft invoice for a deal with your usual defaults. Returns its id and number. */
-export async function createDraftInvoiceFromDeal(supabase: DB, dealId: string, by = "by AI assistant") {
+export async function createDraftInvoiceFromDeal(supabase: DB, dealId: string, by = "by AI assistant", opts: { billTo?: "agency" | "brand" } = {}) {
   const prepared = await itemsFromDeal(supabase, dealId);
   if (!prepared) throw new Error("Deal not found.");
   const { deal, items } = prepared;
   if (!items.length || !items.some((i) => Number(i.rate) > 0)) throw new Error("This deal has no fee yet — add the amount first.");
   const [{ data: profile }, { data: brand }] = await Promise.all([
     supabase.from("profile").select("invoice_prefix, payment_terms_days, default_tds_rate, default_tds_section").maybeSingle(),
-    supabase.from("brands").select("name, legal_name, billing_address, gstin, pan").eq("id", deal.brand_id).single(),
+    // Billed to the agency when the deal came through one (unless you chose the brand).
+    supabase.from("brands").select("id, name, legal_name, billing_address, gstin, pan, tds_rate").eq("id", (opts.billTo ?? (deal.agency_id ? "agency" : "brand")) === "agency" && deal.agency_id ? deal.agency_id : deal.brand_id).single(),
   ]);
   const today = todayIST();
   const num = await nextInvoiceNumber(supabase, profile?.invoice_prefix ?? "INV", today);
   const { data: inv, error } = await supabase
     .from("invoices")
     .insert({
-      brand_id: deal.brand_id,
+      brand_id: brand?.id ?? deal.brand_id,
       deal_id: deal.id,
       fy: num.fy,
       seq: num.seq,
@@ -57,8 +58,8 @@ export async function createDraftInvoiceFromDeal(supabase: DB, dealId: string, b
       bill_to_address: brand?.billing_address ?? null,
       bill_to_gstin: brand?.gstin ?? null,
       bill_to_pan: brand?.pan ?? null,
-      tds_rate: profile?.default_tds_rate ?? 10,
-      tds_section: profile?.default_tds_section ?? "194J",
+      tds_rate: deal.tds_rate ?? brand?.tds_rate ?? profile?.default_tds_rate ?? 10,
+      tds_section: Number(deal.tds_rate ?? brand?.tds_rate ?? profile?.default_tds_rate ?? 10) === 2 ? "194C" : profile?.default_tds_section ?? "194J",
     })
     .select("id, invoice_number")
     .single();

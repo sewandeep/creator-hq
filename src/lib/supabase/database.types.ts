@@ -121,14 +121,14 @@ isOneToOne: false
                   ]
                 },"brands": {
                   Row: {
-                    "billing_address": string | null,"category": string | null,"created_at": string,"gstin": string | null,"id": string,"instagram": string | null,"legal_name": string | null,"name": string,"notes": string | null,"pan": string | null,"tan": string | null,"updated_at": string,"user_id": string,"website": string | null
+                    "billing_address": string | null,"category": string | null,"created_at": string,"gstin": string | null,"id": string,"instagram": string | null,"is_agency": boolean,"legal_name": string | null,"name": string,"notes": string | null,"pan": string | null,"tan": string | null,"tds_rate": number | null,"updated_at": string,"user_id": string,"website": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "billing_address"?: string | null,"category"?: string | null,"created_at"?: string,"gstin"?: string | null,"id"?: string,"instagram"?: string | null,"legal_name"?: string | null,"name": string,"notes"?: string | null,"pan"?: string | null,"tan"?: string | null,"updated_at"?: string,"user_id"?: string,"website"?: string | null
+                    "billing_address"?: string | null,"category"?: string | null,"created_at"?: string,"gstin"?: string | null,"id"?: string,"instagram"?: string | null,"is_agency"?: boolean,"legal_name"?: string | null,"name": string,"notes"?: string | null,"pan"?: string | null,"tan"?: string | null,"tds_rate"?: number | null,"updated_at"?: string,"user_id"?: string,"website"?: string | null
                   }
                   Update: {
-                    "billing_address"?: string | null,"category"?: string | null,"created_at"?: string,"gstin"?: string | null,"id"?: string,"instagram"?: string | null,"legal_name"?: string | null,"name"?: string,"notes"?: string | null,"pan"?: string | null,"tan"?: string | null,"updated_at"?: string,"user_id"?: string,"website"?: string | null
+                    "billing_address"?: string | null,"category"?: string | null,"created_at"?: string,"gstin"?: string | null,"id"?: string,"instagram"?: string | null,"is_agency"?: boolean,"legal_name"?: string | null,"name"?: string,"notes"?: string | null,"pan"?: string | null,"tan"?: string | null,"tds_rate"?: number | null,"updated_at"?: string,"user_id"?: string,"website"?: string | null
                   }
                   Relationships: [
                     
@@ -209,14 +209,14 @@ isOneToOne: false
                   ]
                 },"deals": {
                   Row: {
-                    "amount": number | null,"barter_value": number | null,"brand_id": string,"contact_id": string | null,"created_at": string,"deal_date": string,"due_date": string | null,"id": string,"is_barter": boolean,"lost_reason": string | null,"next_follow_up": string | null,"notes": string | null,"platform": string | null,"source": string | null,"stage": string,"stage_changed_at": string,"title": string,"updated_at": string,"user_id": string
+                    "agency_id": string | null,"amount": number | null,"barter_value": number | null,"brand_id": string,"contact_id": string | null,"created_at": string,"deal_date": string,"due_date": string | null,"id": string,"is_barter": boolean,"lost_reason": string | null,"next_follow_up": string | null,"notes": string | null,"platform": string | null,"source": string | null,"stage": string,"stage_changed_at": string,"tds_rate": number | null,"title": string,"updated_at": string,"user_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount"?: number | null,"barter_value"?: number | null,"brand_id": string,"contact_id"?: string | null,"created_at"?: string,"deal_date"?: string,"due_date"?: string | null,"id"?: string,"is_barter"?: boolean,"lost_reason"?: string | null,"next_follow_up"?: string | null,"notes"?: string | null,"platform"?: string | null,"source"?: string | null,"stage"?: string,"stage_changed_at"?: string,"title": string,"updated_at"?: string,"user_id"?: string
+                    "agency_id"?: string | null,"amount"?: number | null,"barter_value"?: number | null,"brand_id": string,"contact_id"?: string | null,"created_at"?: string,"deal_date"?: string,"due_date"?: string | null,"id"?: string,"is_barter"?: boolean,"lost_reason"?: string | null,"next_follow_up"?: string | null,"notes"?: string | null,"platform"?: string | null,"source"?: string | null,"stage"?: string,"stage_changed_at"?: string,"tds_rate"?: number | null,"title": string,"updated_at"?: string,"user_id"?: string
                   }
                   Update: {
-                    "amount"?: number | null,"barter_value"?: number | null,"brand_id"?: string,"contact_id"?: string | null,"created_at"?: string,"deal_date"?: string,"due_date"?: string | null,"id"?: string,"is_barter"?: boolean,"lost_reason"?: string | null,"next_follow_up"?: string | null,"notes"?: string | null,"platform"?: string | null,"source"?: string | null,"stage"?: string,"stage_changed_at"?: string,"title"?: string,"updated_at"?: string,"user_id"?: string
+                    "agency_id"?: string | null,"amount"?: number | null,"barter_value"?: number | null,"brand_id"?: string,"contact_id"?: string | null,"created_at"?: string,"deal_date"?: string,"due_date"?: string | null,"id"?: string,"is_barter"?: boolean,"lost_reason"?: string | null,"next_follow_up"?: string | null,"notes"?: string | null,"platform"?: string | null,"source"?: string | null,"stage"?: string,"stage_changed_at"?: string,"tds_rate"?: number | null,"title"?: string,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {

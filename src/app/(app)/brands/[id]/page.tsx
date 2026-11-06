@@ -6,6 +6,7 @@ import { ActionForm, SubmitButton } from "@/components/forms";
 import { Card, Empty, PageHeader, Stat, StageBadge } from "@/components/ui";
 import { requireUser } from "@/lib/auth";
 import { fmtDate, rupees } from "@/lib/format";
+import { PartyRule } from "../../deals/party-rule";
 import { BrandFields } from "../brand-fields";
 import { AddContact, ContactRow } from "../contact-parts";
 
@@ -39,7 +40,12 @@ export default async function BrandPage({ params }: { params: Promise<{ id: stri
       </div>
       <PageHeader
         title={brand.name}
-        subtitle={[brand.category, brand.instagram].filter(Boolean).join(" · ") || undefined}
+        subtitle={
+          <span className="flex flex-wrap items-center gap-2">
+            {[brand.is_agency ? "Agency" : null, brand.category, brand.instagram].filter(Boolean).join(" · ")}
+            <PartyRule brandId={brand.id} isAgency={brand.is_agency} tdsRate={brand.tds_rate === null ? null : Number(brand.tds_rate)} />
+          </span>
+        }
         actions={
           <>
             <Link href={`/email/compose?brand=${brand.id}`} className="btn-secondary">Email</Link>

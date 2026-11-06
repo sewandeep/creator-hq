@@ -8,22 +8,36 @@ import { requireUser } from "@/lib/auth";
 import { fmtDate, fmtDateTime, relativeDay, rupees, todayIST } from "@/lib/format";
 import { isOverdue } from "@/lib/money";
 import { UploadForm } from "./[id]/parts";
+import { DealParties, InvoiceBox, PaymentsBox, type PaymentView } from "./money-parts";
 import { ContentAdder, InlineField, NoteAdder, PostedButton, StagePicker } from "./work-parts";
 
 /** Everything about one deal, opened next to the list. */
 export async function DealPanel({ id, closeHref }: { id: string; closeHref: string }) {
   const { supabase } = await requireUser();
   const today = todayIST();
-  const [{ data: deal }, { data: content }, { data: invoices }, { data: notes }, { data: files }] = await Promise.all([
-    supabase.from("deals").select("*, brand:brands(id, name), contact:contacts(name, email, phone)").eq("id", id).maybeSingle(),
+  const [{ data: deal }, { data: content }, { data: invoices }, { data: notes }, { data: files }, { data: agencyRows }] = await Promise.all([
+    supabase.from("deals").select("*, brand:brands(id, name, tds_rate, is_agency), contact:contacts(name, email, phone)").eq("id", id).maybeSingle(),
     supabase.from("deliverables").select("id, type, quantity, due_date, status, link").eq("deal_id", id).order("created_at"),
-    supabase.from("invoices").select("id, invoice_number, subtotal, status, due_date, tds_rate, payments(gross_amount, tds_amount)").eq("deal_id", id).neq("status", "cancelled").order("issue_date"),
+    supabase.from("invoices").select("id, invoice_number, subtotal, status, issue_date, due_date, brand_id, tds_rate, invoice_items(description, quantity, rate, position), payments(id, gross_amount, tds_amount, received_date, notes)").eq("deal_id", id).neq("status", "cancelled").order("issue_date"),
     supabase.from("activities").select("id, kind, body, created_at").eq("deal_id", id).order("created_at", { ascending: false }).limit(6),
     supabase.from("deal_files").select("id, name, kind").eq("deal_id", id).order("created_at", { ascending: false }),
+    supabase.from("brands").select("id, name, tds_rate, is_agency").order("name"),
   ]);
   if (!deal) return <p className="p-6 text-sm text-slate-500">This deal was deleted. <Link href={closeHref} className="link">Back</Link></p>;
 
   const stage = deal.stage;
+  const agency = (agencyRows ?? []).find((a) => a.id === deal.agency_id) ?? null;
+  const agencyNames = (agencyRows ?? []).filter((a) => a.is_agency).map((a) => a.name);
+  const brandNames = (agencyRows ?? []).filter((a) => !a.is_agency).map((a) => a.name);
+  const ruleFrom = agency ?? deal.brand;
+  const ruleHint = ruleFrom?.tds_rate === null || ruleFrom?.tds_rate === undefined ? null : `${ruleFrom.name}'s rule: ${Number(ruleFrom.tds_rate) ? `cuts ${Number(ruleFrom.tds_rate)}% TDS` : "no TDS"}`;
+  // Payments, with the bank line each came from.
+  const allPayments = (invoices ?? []).flatMap((i) => i.payments);
+  const { data: linked } = allPayments.length ? await supabase.from("transactions").select("payment_id, counterparty, description").in("payment_id", allPayments.map((p) => p.id)) : { data: [] };
+  const bankFor = new Map((linked ?? []).map((t) => [t.payment_id, t.counterparty || t.description.slice(0, 40)]));
+  const paymentViews: PaymentView[] = allPayments
+    .map((p) => ({ id: p.id, date: p.received_date, net: Number(p.gross_amount) - Number(p.tds_amount), tds: Number(p.tds_amount), from: bankFor.get(p.id) ?? (p.notes && p.notes !== "Added by hand" ? p.notes : null), bank: bankFor.has(p.id) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
   const items = content ?? [];
   const inv = invoices?.[0];
   const balance = inv ? Number(inv.subtotal) - inv.payments.reduce((s, p) => s + Number(p.gross_amount), 0) : 0;
@@ -79,7 +93,15 @@ export async function DealPanel({ id, closeHref }: { id: string; closeHref: stri
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <Link href={`/brands/${deal.brand?.id}`} className="text-sm font-medium text-slate-500 hover:underline">{deal.brand?.name}</Link>
+          <div className="text-sm font-medium text-slate-500">
+            {agency && (
+              <>
+                <Link href={`/brands/${agency.id}`} className="hover:underline">{agency.name}</Link>
+                <span className="mx-1 text-slate-300">›</span>
+              </>
+            )}
+            <Link href={`/brands/${deal.brand?.id}`} className="hover:underline">{deal.brand?.name}</Link>
+          </div>
           <h2 className="text-xl font-semibold tracking-tight">
             <InlineField key={`t-${deal.title}`} dealId={id} field="title" value={deal.title} />
           </h2>
@@ -95,6 +117,7 @@ export async function DealPanel({ id, closeHref }: { id: string; closeHref: stri
         <Fact label="Deadline"><InlineField key={`d-${deal.due_date}`} dealId={id} field="due_date" value={deal.due_date} kind="date" placeholder="Set date" /></Fact>
         <Fact label="Follow up"><InlineField key={`f-${deal.next_follow_up}`} dealId={id} field="next_follow_up" value={deal.next_follow_up} kind="date" placeholder="Set date" /></Fact>
         <Fact label="Platform"><InlineField key={`p-${deal.platform}`} dealId={id} field="platform" value={deal.platform} placeholder="Instagram?" /></Fact>
+        <DealParties key={`${deal.agency_id}-${deal.tds_rate}-${deal.brand_id}`} dealId={id} brand={deal.brand?.name ?? ""} brandIsAgency={Boolean(deal.brand?.is_agency)} brands={brandNames} agency={agency?.name ?? null} agencies={agencyNames} tdsRate={deal.tds_rate === null ? null : Number(deal.tds_rate)} ruleHint={ruleHint} />
         {deal.contact && (
           <Fact label="Contact" wide>
             {deal.contact.name}
@@ -126,25 +149,32 @@ export async function DealPanel({ id, closeHref }: { id: string; closeHref: stri
         <ContentAdder dealId={id} />
       </Section>
 
-      {(invoices?.length ?? 0) > 0 && (
-        <Section title="Money">
-          <ul className="space-y-2 text-sm">
-            {invoices!.map((i) => {
-              const paid = i.payments.reduce((s, p) => s + Number(p.gross_amount), 0);
-              const tds = i.payments.reduce((s, p) => s + Number(p.tds_amount), 0);
-              return (
-                <li key={i.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2.5 ring-1 ring-slate-200">
-                  <Link href={`/invoices/${i.id}`} className="link font-medium">{i.invoice_number}</Link>
-                  <span className="text-slate-600">
-                    {rupees(i.subtotal)}
-                    {paid > 0 ? ` · ${rupees(paid - tds)} in bank${tds ? ` + ${rupees(tds)} TDS` : ""}` : ` · ${i.status === "draft" ? "not sent yet" : "unpaid"}`}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </Section>
-      )}
+      <Section title="Invoice">
+        <InvoiceBox
+          key={inv ? `${inv.id}-${inv.subtotal}-${inv.brand_id}-${inv.issue_date}-${inv.due_date}` : "none"}
+          dealId={id}
+          hasFee={Boolean(deal.amount)}
+          parties={[...(agency ? [{ id: agency.id, name: agency.name, role: "agency" }] : []), ...(deal.brand ? [{ id: deal.brand.id, name: deal.brand.name, role: "brand" }] : [])]}
+          invoice={
+            inv
+              ? {
+                  id: inv.id,
+                  number: inv.invoice_number,
+                  status: inv.status,
+                  issueDate: inv.issue_date,
+                  dueDate: inv.due_date,
+                  billToId: inv.brand_id,
+                  subtotal: Number(inv.subtotal),
+                  items: [...inv.invoice_items].sort((x, y) => x.position - y.position).map((it) => ({ description: it.description, quantity: Number(it.quantity), rate: Number(it.rate) })),
+                }
+              : null
+          }
+        />
+      </Section>
+
+      <Section title="Payments">
+        <PaymentsBox dealId={id} payments={paymentViews} expected={Number(inv?.subtotal ?? deal.amount ?? 0)} rate={Number(deal.tds_rate ?? inv?.tds_rate ?? 0)} />
+      </Section>
 
       <Section title="Notes">
         <NoteAdder dealId={id} />

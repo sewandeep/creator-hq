@@ -28,6 +28,7 @@ How money is counted in this app:
 - Family is a two-way bucket (money given to / received from family, with the person) and is never counted as spending or income.
 - Lending & borrowing is per person: "Lent money" and "Paid back a loan" (money out), "Money returned" and "Borrowed" (money in). A person's balance = money out to them − money in from them (positive: they owe the user; negative: the user owes them).
 - "Pass-through" is money that came in only to go out again (e.g. received for a friend and passed on); it counts as neither income nor spending.
+- Deals can come through an agency (who usually pays and cuts TDS) or directly from the brand. If a deal has TDS on, any money that arrives is taken as already after TDS (e.g. ₹27,000 received at 10% = ₹30,000 fee + ₹3,000 TDS). A deal can be paid in several parts (advance, rest).
 - Studio purchases (camera gear, lights, equipment) are "Studio & equipment"; a camera or equipment EMI is "EMI & loans". Always reply in clear, simple English.
 
 Today is ${fmtDate(today)} (${today}), India time. Current financial year: ${fyLabel(fyOf(today))} (April–March).

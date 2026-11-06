@@ -31,3 +31,17 @@ export async function findOrCreateBrand(supabase: DB, name: string): Promise<str
   if (error) throw error;
   return data.id;
 }
+
+/** An agency by name (created and marked as an agency if new), with its TDS rule. */
+export async function findOrCreateAgency(supabase: DB, name: string): Promise<{ id: string; tdsRate: number | null }> {
+  const id = await findOrCreateBrand(supabase, name);
+  const { data } = await supabase.from("brands").update({ is_agency: true }).eq("id", id).select("tds_rate").single();
+  return { id, tdsRate: data?.tds_rate === null || data?.tds_rate === undefined ? null : Number(data.tds_rate) };
+}
+
+/** The TDS rule a new deal starts with: the agency's, else the brand's, else none set. */
+export async function startingTdsRate(supabase: DB, brandId: string, agency: { tdsRate: number | null } | null) {
+  if (agency && agency.tdsRate !== null) return agency.tdsRate;
+  const { data } = await supabase.from("brands").select("tds_rate").eq("id", brandId).single();
+  return data?.tds_rate === null || data?.tds_rate === undefined ? null : Number(data.tds_rate);
+}

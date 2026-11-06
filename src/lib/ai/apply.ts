@@ -1,5 +1,5 @@
 import "server-only";
-import { findOrCreateBrand, type DB } from "@/app/actions/helpers";
+import { findOrCreateAgency, findOrCreateBrand, startingTdsRate, type DB } from "@/app/actions/helpers";
 import { STAGE_IDS, type StageId } from "@/lib/constants";
 import { ensureCategories } from "@/lib/finance/categories-server";
 import { addEntry, applyCategory } from "@/lib/finance/entries";
@@ -50,6 +50,8 @@ async function run(db: DB, userId: string, kind: string, p: P, password?: string
   switch (kind) {
     case "new_deal": {
       const brandId = await findOrCreateBrand(db, s(p.brand)!);
+      const agency = s(p.agency) ? await findOrCreateAgency(db, s(p.agency)!) : null;
+      const tdsRate = await startingTdsRate(db, brandId, agency);
       let contactId: string | null = null;
       if (s(p.contact_name) || s(p.contact_email)) {
         const { data: c } = await db.from("contacts").insert({ brand_id: brandId, name: s(p.contact_name) ?? s(p.contact_email)!, email: s(p.contact_email) }).select("id").single();
@@ -60,6 +62,8 @@ async function run(db: DB, userId: string, kind: string, p: P, password?: string
         .from("deals")
         .insert({
           brand_id: brandId,
+          agency_id: agency?.id ?? null,
+          tds_rate: tdsRate,
           contact_id: contactId,
           title: s(p.title)!,
           stage,
