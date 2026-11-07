@@ -241,7 +241,12 @@ function AddPayment({ dealId, rate }: { dealId: string; rate: number }) {
   const [list, setList] = useState<Awaited<ReturnType<typeof paymentCandidates>> | null>(null);
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState("");
+  const [find, setFind] = useState("");
   const [, start] = useTransition();
+  const needle = find.trim().toLowerCase().replace(/[₹,]/g, "");
+  const shown = (list?.items ?? [])
+    .filter((t) => !needle || `${t.who} ${t.note ?? ""} ${t.amount} ${t.date}`.toLowerCase().includes(needle))
+    .slice(0, needle ? 30 : 10);
 
   if (!open)
     return (
@@ -267,16 +272,18 @@ function AddPayment({ dealId, rate }: { dealId: string; rate: number }) {
         <button type="button" onClick={() => setOpen(false)} className="btn-ghost px-2 py-0.5 text-xs">✕</button>
       </div>
       {rate > 0 && <p className="text-xs text-slate-500">TDS is on ({rate}%), so the amount that reached you is taken as after TDS.</p>}
+      <input value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search: name (e.g. zixi) or amount" className="input py-1.5 text-sm" />
       {!list ? (
         <p className="text-sm text-slate-500">Looking at your bank…</p>
-      ) : list.items.length ? (
-        <ul className="max-h-64 space-y-1 overflow-y-auto">
-          {list.items.map((t) => (
+      ) : shown.length ? (
+        <ul className="max-h-72 space-y-1 overflow-y-auto">
+          {shown.map((t) => (
             <li key={t.id}>
               <button type="button" onClick={() => add({ txnId: t.id })} className="flex w-full items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-left text-sm ring-1 ring-slate-200 hover:ring-brand-300">
                 <span className="min-w-0 truncate">
                   {day(t.date)} · {t.who}
                   {t.note ? <span className="text-slate-400"> · {t.note}</span> : null}
+                  {t.category ? <span className="text-slate-400"> · {t.category}</span> : null}
                 </span>
                 <span className={`shrink-0 tabular-nums font-medium ${Math.abs(t.amount - list.remainingNet) < 1 ? "text-emerald-700" : ""}`}>{inr(t.amount)}</span>
               </button>
@@ -284,7 +291,7 @@ function AddPayment({ dealId, rate }: { dealId: string; rate: number }) {
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-slate-500">No unlinked money in found around this deal&apos;s dates.</p>
+        <p className="text-sm text-slate-500">{needle ? "Nothing matches — try part of the name or the exact amount." : "No unlinked money in found."}</p>
       )}
       <form
         onSubmit={(e) => {

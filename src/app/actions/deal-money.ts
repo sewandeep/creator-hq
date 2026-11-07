@@ -99,25 +99,29 @@ export async function paymentCandidates(dealId: string) {
   const got = (deal?.invoices ?? []).flatMap((i) => i.payments).reduce((s, p) => s + Number(p.gross_amount), 0);
   const rate = Number(deal?.tds_rate ?? 0);
   const remainingNet = Math.max(0, (gross - got) * (1 - rate / 100));
-  const since = addDays(deal?.deal_date ?? todayIST(), -60);
+  // Look back far enough for old work entered later (e.g. a May payment for a deal added in November).
+  const since = addDays(todayIST(), -550);
   const { data } = await supabase
     .from("transactions")
-    .select("id, txn_date, amount, counterparty, description, note, category:categories(name, kind)")
+    .select("id, txn_date, amount, counterparty, description, note, category:categories(name, kind, stream)")
     .eq("direction", "credit")
     .is("payment_id", null)
     .is("pair_id", null)
     .gte("txn_date", since)
     .gte("amount", 100)
     .order("txn_date", { ascending: false })
-    .limit(300);
-  const ok = (data ?? []).filter((t) => !t.category || ["income"].includes(t.category.kind) && !/sajilo/i.test(t.category.name));
+    .limit(1500);
+  // Money in that could be brand money: not sorted yet, or sorted as income (but not Sajilo).
+  const ok = (data ?? []).filter((t) => !t.category || (t.category.kind === "income" && !/sajilo/i.test(t.category.name)));
+  const creatorFirst = (c: string | null | undefined) => (c === "creator" ? 0 : 1);
   return {
     remainingNet: round2(remainingNet),
     rate,
+    // Closest amounts first, creator income before other money; the picker can search the rest.
     items: ok
-      .map((t) => ({ id: t.id, date: t.txn_date, amount: Number(t.amount), who: t.counterparty || t.description.slice(0, 40), note: t.note, category: t.category?.name ?? null }))
-      .sort((a, b) => Math.abs(a.amount - remainingNet) - Math.abs(b.amount - remainingNet) || (a.date < b.date ? 1 : -1))
-      .slice(0, 12),
+      .map((t) => ({ id: t.id, date: t.txn_date, amount: Number(t.amount), who: t.counterparty || t.description.slice(0, 40), note: t.note, category: t.category?.name ?? null, stream: t.category?.stream ?? null }))
+      .sort((a, b) => creatorFirst(a.stream) - creatorFirst(b.stream) || Math.abs(a.amount - remainingNet) - Math.abs(b.amount - remainingNet) || (a.date < b.date ? 1 : -1))
+      .slice(0, 400),
   };
 }
 
